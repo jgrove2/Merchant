@@ -1,0 +1,17 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  bin = "./tmp/trader_bin"
+  cmd = "go build -o ./tmp/trader_bin ./cmd/trader/main.go"
+  delay = 1000
+  exclude_dir = ["tmp"]
+  include_dir = ["cmd/trader", "internal", "pkg"]
+  include_ext = ["go"]
+  send_interrupt = true
+
+[log]
+  time = false
+
+[color]
+  main = "green"

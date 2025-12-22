@@ -1,0 +1,45 @@
+services:
+  # 1. Backend-for-Frontend (API)
+  bff:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: /bin/bff
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - PORT=8080
+    restart: always
+
+  # 2. Manager (Sync/Arb Logic)
+  manager:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: /bin/manager
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    restart: always
+
+  # 3. Trader (Execution Logic)
+  trader:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: /bin/trader
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    restart: always
+
+  # 4. Frontend (Vite/TanStack)
+  # In production, you'd usually serve this via Nginx, 
+  # but this setup runs the dev/preview server for testing.
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8080
+    restart: always

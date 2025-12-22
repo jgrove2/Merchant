@@ -14,6 +14,10 @@ import appCss from '../styles.css?url'
 
 import type { QueryClient } from '@tanstack/react-query'
 
+// Themeing
+import { initTheme } from "@/lib/theme";
+import "./styles/globals.css";
+
 interface MyRouterContext {
   queryClient: QueryClient
 }
@@ -44,12 +48,14 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  initTheme();
   return (
     <html lang="en">
       <head>
         <HeadContent />
       </head>
       <body>
+        <Header />
         {children}
         <TanStackDevtools
           config={{

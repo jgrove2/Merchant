@@ -1,4 +1,5 @@
-:root {
+/* ---------- TOKYO NIGHT DARK ---------- */
+:root[data-theme="tokyo-dark"] {
   --background: 222 22% 10%;
   --foreground: 220 15% 88%;
 
@@ -27,10 +28,46 @@
   --input: 222 16% 18%;
   --ring: 210 100% 66%;
 
-  /* charts */
   --chart-1: 210 100% 66%;
   --chart-2: 160 84% 45%;
   --chart-3: 265 89% 78%;
   --chart-4: 35 92% 65%;
   --chart-5: 0 72% 55%;
+}
+
+/* ---------- TOKYO NIGHT LIGHT ---------- */
+:root[data-theme="tokyo-light"] {
+  --background: 220 33% 96%;
+  --foreground: 222 22% 18%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222 22% 18%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 22% 18%;
+
+  --primary: 210 100% 45%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 220 20% 92%;
+  --secondary-foreground: 222 22% 18%;
+
+  --muted: 220 20% 92%;
+  --muted-foreground: 220 10% 45%;
+
+  --accent: 265 89% 65%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 72% 50%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 220 15% 85%;
+  --input: 220 15% 85%;
+  --ring: 210 100% 45%;
+
+  --chart-1: 210 100% 45%;
+  --chart-2: 160 84% 35%;
+  --chart-3: 265 89% 60%;
+  --chart-4: 35 92% 55%;
+  --chart-5: 0 72% 50%;
 }
