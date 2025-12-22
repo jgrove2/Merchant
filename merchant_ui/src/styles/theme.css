@@ -1,0 +1,36 @@
+:root {
+  --background: 222 22% 10%;
+  --foreground: 220 15% 88%;
+
+  --card: 222 22% 12%;
+  --card-foreground: 220 15% 88%;
+
+  --popover: 222 22% 12%;
+  --popover-foreground: 220 15% 88%;
+
+  --primary: 210 100% 66%;
+  --primary-foreground: 222 22% 10%;
+
+  --secondary: 222 16% 18%;
+  --secondary-foreground: 220 15% 88%;
+
+  --muted: 222 16% 18%;
+  --muted-foreground: 220 10% 60%;
+
+  --accent: 265 89% 78%;
+  --accent-foreground: 222 22% 10%;
+
+  --destructive: 0 72% 55%;
+  --destructive-foreground: 220 15% 88%;
+
+  --border: 222 16% 18%;
+  --input: 222 16% 18%;
+  --ring: 210 100% 66%;
+
+  /* charts */
+  --chart-1: 210 100% 66%;
+  --chart-2: 160 84% 45%;
+  --chart-3: 265 89% 78%;
+  --chart-4: 35 92% 65%;
+  --chart-5: 0 72% 55%;
+}
