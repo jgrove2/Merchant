@@ -41,6 +41,7 @@ func main() {
 		api.GET("/opportunities", h.GetOpportunities)
 		api.GET("/providers", h.GetProviders)
 		api.GET("/balance", h.GetTotalBalance)
+		api.GET("/markets", h.GetMarkets)
 		api.POST("/trader/killswitch", h.ToggleTrading)
 	}
 

@@ -11,32 +11,67 @@ import {
   StickyNote,
   X,
 } from 'lucide-react'
+import { useBalance } from '@/hooks/useBalance'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false)
   const [groupedExpanded, setGroupedExpanded] = useState<
     Record<string, boolean>
   >({})
+  const { data: balanceData, isLoading } = useBalance()
+
+  const formatCurrency = (cents: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+    }).format(cents / 100);
+  };
+
+  // Mock total bets for now - this would come from another endpoint
+  const totalBets = 0; // TODO: Get from API
 
   return (
     <>
-      <header className="p-4 flex items-center bg-gray-800 text-white shadow-lg">
-        <button
-          onClick={() => setIsOpen(true)}
-          className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-          aria-label="Open menu"
-        >
-          <Menu size={24} />
-        </button>
-        <h1 className="ml-4 text-xl font-semibold">
-          <Link to="/">
-            <img
-              src="/tanstack-word-logo-white.svg"
-              alt="TanStack Logo"
-              className="h-10"
-            />
-          </Link>
-        </h1>
+      <header className="p-4 flex items-center justify-between bg-gray-800 text-white shadow-lg">
+        <div className="flex items-center">
+          <h1 className="ml-4 text-xl font-semibold">
+            <Link to="/">
+              <h1>Merchant</h1>
+            </Link>
+          </h1>
+        </div>
+
+        {!isLoading && balanceData && (
+          <div className="flex items-center gap-3 text-sm font-medium">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="text-gray-400 hover:text-gray-300 transition-colors cursor-help">
+                  {formatCurrency(totalBets)}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Total in Bets</p>
+              </TooltipContent>
+            </Tooltip>
+            <div className="text-gray-500">|</div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="text-emerald-400 hover:text-emerald-300 transition-colors cursor-help">
+                  {formatCurrency(balanceData.total_balance)}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Cash Available</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )}
       </header>
 
       <aside

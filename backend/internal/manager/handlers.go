@@ -2,6 +2,7 @@ package manager
 
 import (
 	"log"
+	"strconv"
 
 	"backend/internal/kalshi"
 	"github.com/gin-gonic/gin"
@@ -39,6 +40,49 @@ func (h *Handler) GetProviderBalance(c *gin.Context) {
 		return
 	}
 	c.JSON(404, gin.H{"error": "Provider not supported"})
+}
+
+func (h *Handler) GetMarkets(c *gin.Context) {
+	if h.KClient == nil {
+		c.JSON(503, gin.H{"error": "Kalshi client not configured"})
+		return
+	}
+
+	// Parse query parameters
+	limit := 100 // default limit
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	// Status defaults to "open" and only accepts "open"
+	status := c.Query("status")
+	if status == "" {
+		status = "open"
+	} else if status != "open" {
+		c.JSON(400, gin.H{"error": "Only 'open' status is currently supported"})
+		return
+	}
+
+	cursor := c.Query("cursor")
+
+	response, err := h.KClient.GetMarkets(limit, cursor, status)
+	if err != nil {
+		log.Println("Error fetching markets:", err.Error())
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	if response == nil || response.Markets == nil || len(response.Markets) == 0 {
+		c.JSON(404, gin.H{"error": "No markets found"})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"markets": response.Markets,
+		"cursor":  response.Cursor,
+	})
 }
 
 // RunSyncCycle performs the market sync and arbitrage calculation

@@ -17,6 +17,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"backend/internal/kalshi/types"
 )
 
 // Client handles communication with the Kalshi API
@@ -50,8 +52,6 @@ func NewClient(baseURL, accessKey, keyPath string) (*Client, error) {
 		return nil, fmt.Errorf("failed to load private key: %w", err)
 	}
 
-	log.Printf("[Kalshi] Successfully loaded private key, key size: %d bits", privKey.N.BitLen())
-
 	return &Client{
 		BaseURL:    strings.TrimSuffix(baseURL, "/"),
 		AccessKey:  accessKey,
@@ -70,21 +70,15 @@ func (c *Client) DoRequest(method, path string, body io.Reader) ([]byte, error) 
 	// 2. Generate Signature (Path must be stripped of query params for signing)
 	pathWithoutQuery := strings.Split(path, "?")[0]
 
-	// Debug logging
-	signMsg := timestamp + method + pathWithoutQuery
-	log.Printf("[Kalshi] Signing message: %q", signMsg)
-	log.Printf("[Kalshi] Timestamp: %s, Method: %s, Path: %s", timestamp, method, pathWithoutQuery)
+	log.Println(pathWithoutQuery)
 
 	sig, err := c.signMessage(method, pathWithoutQuery, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("signing error: %w", err)
 	}
 
-	log.Printf("[Kalshi] Signature: %s", sig)
-
 	// 3. Create Request
 	url := c.BaseURL + path
-	log.Printf("[Kalshi] Full URL: %s", url)
 
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
@@ -96,8 +90,6 @@ func (c *Client) DoRequest(method, path string, body io.Reader) ([]byte, error) 
 	req.Header.Set("KALSHI-ACCESS-SIGNATURE", sig)
 	req.Header.Set("KALSHI-ACCESS-TIMESTAMP", timestamp)
 	req.Header.Set("Content-Type", "application/json")
-
-	log.Printf("[Kalshi] Access Key: %s", c.AccessKey)
 
 	// 5. Execute
 	resp, err := c.HTTPClient.Do(req)
@@ -111,9 +103,6 @@ func (c *Client) DoRequest(method, path string, body io.Reader) ([]byte, error) 
 		return nil, err
 	}
 
-	log.Printf("[Kalshi] Response Status: %d", resp.StatusCode)
-	log.Printf("[Kalshi] Response Body: %s", string(respBody))
-
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("kalshi api error (status %d): %s", resp.StatusCode, string(respBody))
 	}
@@ -126,15 +115,8 @@ func (c *Client) signMessage(method, path, timestamp string) (string, error) {
 	// Message format: timestamp + method + path
 	msg := timestamp + method + path
 
-	log.Printf("[Kalshi] Raw message to sign: %q", msg)
-	log.Printf("[Kalshi] Message bytes: %v", []byte(msg))
-
-	// Hash the message with SHA256
 	hashed := sha256.Sum256([]byte(msg))
-	log.Printf("[Kalshi] SHA256 hash: %x", hashed)
 
-	// PSS Options: Salt length matches hash length (SHA256 = 32 bytes)
-	// MGF1 is the default mask generation function
 	opts := &rsa.PSSOptions{
 		SaltLength: rsa.PSSSaltLengthEqualsHash,
 		Hash:       crypto.SHA256,
@@ -149,8 +131,6 @@ func (c *Client) signMessage(method, path, timestamp string) (string, error) {
 	}
 
 	sigBase64 := base64.StdEncoding.EncodeToString(signature)
-	log.Printf("[Kalshi] Signature length: %d bytes", len(signature))
-	log.Printf("[Kalshi] Signature (base64): %s", sigBase64)
 
 	return sigBase64, nil
 }
@@ -185,10 +165,18 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	return rsaKey, nil
 }
 
-// --- Example Method: GetBalance ---
-
 type BalanceResponse struct {
 	Balance int64 `json:"balance"`
+}
+
+type APIResponse struct {
+	Markets []types.MarketData `json:"markets"`
+	Cursor  string             `json:"cursor"`
+}
+
+type MarketsResponse struct {
+	Markets []types.SimplifiedMarket `json:"markets"`
+	Cursor  string                   `json:"cursor"`
 }
 
 func (c *Client) GetBalance() (int64, error) {
@@ -203,4 +191,57 @@ func (c *Client) GetBalance() (int64, error) {
 	}
 
 	return res.Balance, nil
+}
+
+func (c *Client) GetMarkets(limit int, cursor string, status string) (*MarketsResponse, error) {
+	// Build query parameters
+	path := "/trade-api/v2/markets"
+	params := []string{}
+
+	if limit > 0 {
+		params = append(params, fmt.Sprintf("limit=%d", limit))
+	}
+
+	if cursor != "" {
+		params = append(params, fmt.Sprintf("cursor=%s", cursor))
+	}
+
+	if status != "" {
+		params = append(params, fmt.Sprintf("status=%s", status))
+	}
+
+	if len(params) > 0 {
+		path = path + "?" + strings.Join(params, "&")
+	}
+
+	log.Printf("[Kalshi] Fetching markets with path: %s", path)
+	data, err := c.DoRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var fullResponse APIResponse
+	if err := json.Unmarshal(data, &fullResponse); err != nil {
+		return nil, err
+	}
+
+	simplified := make([]types.SimplifiedMarket, len(fullResponse.Markets))
+
+	for i, m := range fullResponse.Markets {
+		simplified[i] = types.SimplifiedMarket{
+			Ticker:      m.Ticker,
+			EventTicker: m.EventTicker,
+			Title:       m.Title,
+			YesAsk:      m.YesAsk,
+			NoAsk:       m.NoAsk,
+			YesSubTitle: m.YesSubTitle,
+			NoSubTitle:  m.NoSubTitle,
+			Status:      m.Status,
+		}
+	}
+
+	return &MarketsResponse{
+		Markets: simplified,
+		Cursor:  fullResponse.Cursor,
+	}, nil
 }

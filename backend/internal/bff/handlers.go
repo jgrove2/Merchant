@@ -97,3 +97,59 @@ func (h *Handler) ToggleTrading(c *gin.Context) {
 	// The Manager and Trader services should respect this flag
 	c.JSON(http.StatusOK, gin.H{"trading_active": input.Active})
 }
+
+// GetMarkets forwards the markets request to the manager with pagination support
+func (h *Handler) GetMarkets(c *gin.Context) {
+	// Build the URL with query parameters
+	url := h.ManagerURL + "/markets"
+
+	// Forward all query parameters (limit, cursor, status, etc.)
+	params := []string{}
+	if limit := c.Query("limit"); limit != "" {
+		params = append(params, "limit="+limit)
+	}
+	if cursor := c.Query("cursor"); cursor != "" {
+		params = append(params, "cursor="+cursor)
+	}
+	if status := c.Query("status"); status != "" {
+		params = append(params, "status="+status)
+	}
+
+	if len(params) > 0 {
+		url = url + "?"
+		for i, param := range params {
+			if i > 0 {
+				url = url + "&"
+			}
+			url = url + param
+		}
+	}
+
+	log.Println("Fetching markets from manager:", url)
+	resp, err := http.Get(url)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Failed to contact manager"})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(resp.StatusCode, gin.H{"error": "Failed to get markets from manager"})
+		return
+	}
+
+	var data struct {
+		Markets []map[string]interface{} `json:"markets"`
+		Cursor  string                   `json:"cursor"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode response"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"markets": data.Markets,
+		"cursor":  data.Cursor,
+	})
+}

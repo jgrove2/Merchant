@@ -5,6 +5,7 @@ import {
 } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
+import { useEffect } from 'react'
 
 import Header from '../components/Header'
 
@@ -16,7 +17,7 @@ import type { QueryClient } from '@tanstack/react-query'
 
 // Themeing
 import { initTheme } from "@/lib/theme";
-import "./styles/globals.css";
+import "../styles/globals.css";
 
 interface MyRouterContext {
   queryClient: QueryClient
@@ -48,7 +49,10 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  initTheme();
+  useEffect(() => {
+    initTheme();
+  }, []);
+
   return (
     <html lang="en">
       <head>

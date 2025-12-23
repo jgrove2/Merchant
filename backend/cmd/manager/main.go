@@ -41,6 +41,7 @@ func main() {
 	go func() {
 		r := gin.Default()
 		r.GET("/providers/:name/balance", h.GetProviderBalance)
+		r.GET("/markets", h.GetMarkets)
 
 		log.Println("Manager API running on :8081")
 		if err := r.Run(":8081"); err != nil {

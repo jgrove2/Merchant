@@ -1,7 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { StatsRow } from "@/components/dashboard/stats-row";
-import { PerformanceLine } from "@/components/dashboard/performance-line";
-import { AllocationPie } from "@/components/dashboard/allocation-pie";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -21,13 +19,6 @@ function Dashboard() {
         </header>
 
         <StatsRow />
-
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <PerformanceLine />
-          </div>
-          <AllocationPie />
-        </div>
       </div>
     </div>
   );
