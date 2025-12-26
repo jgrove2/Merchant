@@ -355,6 +355,12 @@ func (h *Handler) SyncEvents() {
 		return
 	}
 
+	// Check if we synced recently (within 24 hours)
+	if time.Since(provider.LastEventSync) < 24*time.Hour {
+		log.Printf("Skipping sync: Last sync was %v ago", time.Since(provider.LastEventSync))
+		return
+	}
+
 	totalFetched := 0
 	eventCursor := ""
 	const batchSize = 100
@@ -364,18 +370,15 @@ func (h *Handler) SyncEvents() {
 		time.Sleep(rateLimitDelay)
 
 		// 2. Fetch from API
-		log.Printf("Cursor before fetch: %s", eventCursor)
 		resp, err := h.fetchEventsWithRetry(batchSize, eventCursor)
 		if err != nil {
 			log.Printf("Failed to fetch events: %v", err)
 			break
 		}
-		log.Printf("Fetch Events With Retry: %s", resp.Cursor)
 		eventCursor = resp.Cursor
 		if resp == nil || len(resp.Events) == 0 {
 			break
 		}
-		log.Printf("Fetched %d events from API, Cursor %s", len(resp.Events), resp.Cursor)
 
 		// 3. Process Data into Structs
 		eventsToUpsert, marketsToUpsert := h.processEventBatch(resp.Events, provider.ID)
@@ -399,18 +402,22 @@ func (h *Handler) SyncEvents() {
 		}
 
 		totalFetched += len(resp.Events)
-		log.Printf("Processed %d events in batch, Cursor %s", len(resp.Events), resp.Cursor)
 		if resp.Cursor == "" {
 			log.Println("Reached end of events list.")
 			break
 		}
-		log.Printf("Updating cursor to: %s", eventCursor)
 	}
 
 	// 6. Cleanup
 	h.pruneStaleEmbeddings()
 
-	h.LastEventSync = time.Now()
+	// Update provider last sync time
+	now := time.Now()
+	if err := h.DB.Model(&provider).Update("last_event_sync", now).Error; err != nil {
+		log.Printf("Failed to update provider last sync time: %v", err)
+	}
+
+	h.LastEventSync = now
 	log.Printf("Event sync complete. Total processed: %d", totalFetched)
 }
 

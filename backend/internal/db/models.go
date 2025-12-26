@@ -6,12 +6,13 @@ import (
 
 // Provider represents an exchange like Kalshi, Polymarket, etc.
 type Provider struct {
-	ID        uint     `gorm:"primaryKey"`
-	Name      string   `gorm:"uniqueIndex;not null"` // e.g., "kalshi"
-	IsActive  bool     `gorm:"default:true"`
-	Markets   []Market `gorm:"foreignKey:ProviderID"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID            uint      `gorm:"primaryKey"`
+	Name          string    `gorm:"uniqueIndex;not null"` // e.g., "kalshi"
+	IsActive      bool      `gorm:"default:true"`
+	LastEventSync time.Time // Last time we successfully synced events
+	Markets       []Market  `gorm:"foreignKey:ProviderID"`
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // Market represents a specific betting contract or event
