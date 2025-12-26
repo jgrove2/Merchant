@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 )
 
@@ -31,13 +32,13 @@ func LoadPrivateKey(path string) (*rsa.PrivateKey, error) {
 		return nil, errors.New("failed to decode PEM block")
 	}
 
-	// Kalshi keys are usually PKCS8 or PKCS1
+	// Try PKCS8 (standard for modern keys)
 	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
-		// Fallback to PKCS1 if PKCS8 fails
+		// Fallback to PKCS1
 		key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse private key: %v", err)
+			return nil, fmt.Errorf("failed to parse RSA private key: %v", err)
 		}
 	}
 
@@ -47,24 +48,29 @@ func LoadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	}
 
 	return rsaKey, nil
+
 }
 
 // SignMessage creates the KALSHI-ACCESS-SIGNATURE using RSA-PSS
-func SignMessage(priv *rsa.PrivateKey, method, path, timestamp string) (string, error) {
-	// Message format: timestamp + method + path (no query params)
+func (a *AuthCredentials) SignMessage(method, path, timestamp string) (string, error) {
 	msg := timestamp + method + path
+
 	hashed := sha256.Sum256([]byte(msg))
 
-	// PSS Options: Salt length matches hash length (SHA256 = 32 bytes)
 	opts := &rsa.PSSOptions{
 		SaltLength: rsa.PSSSaltLengthEqualsHash,
 		Hash:       crypto.SHA256,
 	}
 
-	signature, err := rsa.SignPSS(rand.Reader, priv, crypto.SHA256, hashed[:], opts)
+	// Sign the hashed message
+	// Pass crypto.SHA256 as the hash parameter to indicate what hash was used
+	signature, err := rsa.SignPSS(rand.Reader, a.PrivateKey, crypto.SHA256, hashed[:], opts)
 	if err != nil {
+		log.Printf("[Kalshi] Signing error: %v", err)
 		return "", err
 	}
 
-	return base64.StdEncoding.EncodeToString(signature), nil
+	sigBase64 := base64.StdEncoding.EncodeToString(signature)
+
+	return sigBase64, nil
 }

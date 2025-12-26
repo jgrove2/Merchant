@@ -17,9 +17,10 @@ type Provider struct {
 // Market represents a specific betting contract or event
 type Market struct {
 	ID             uint   `gorm:"primaryKey"`
-	ProviderID     uint   `gorm:"not null"`
+	ProviderID     uint   `gorm:"not null;uniqueIndex:idx_provider_market"`
 	ExternalID     string `gorm:"uniqueIndex:idx_provider_market"` // The ID from Kalshi
 	Ticker         string `gorm:"index"`                           // e.g., "FED-24DEC-T25"
+	EventTicker    string `gorm:"index"`                           // The EventTicker from Kalshi
 	Title          string
 	Description    string
 	Status         string    `gorm:"default:'active'"` // active, closed, settled
@@ -27,6 +28,22 @@ type Market struct {
 	LastDataUpdate time.Time // Last time we pulled orderbook data
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+// Event represents a Kalshi event (group of markets)
+type Event struct {
+	ProviderID             uint   `gorm:"not null;uniqueIndex:idx_provider_event"`
+	ExternalID             string `gorm:"not null;uniqueIndex:idx_provider_event"` // The EventTicker from Kalshi
+	Title                  string
+	Subtitle               string
+	Category               string
+	MutuallyExclusive      bool
+	SeriesTicker           string
+	StrikePeriod           string
+	ExpirationTime         time.Time // When the event generally expires
+	ClosestMarketCloseTime time.Time // Calculated field: nearest market close time
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
 }
 
 // ArbitrageOpportunity represents a detected trade

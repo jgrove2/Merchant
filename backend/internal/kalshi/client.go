@@ -1,20 +1,13 @@
 package kalshi
 
 import (
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
-	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
+	"net/url"
 	"strings"
 	"time"
 
@@ -23,10 +16,9 @@ import (
 
 // Client handles communication with the Kalshi API
 type Client struct {
-	BaseURL    string
-	HTTPClient *http.Client
-	AccessKey  string
-	PrivateKey *rsa.PrivateKey
+	BaseURL     string
+	HTTPClient  *http.Client
+	Credentials AuthCredentials
 }
 
 // NewClient initializes a new Kalshi API client
@@ -47,17 +39,19 @@ func NewClient(baseURL, accessKey, keyPath string) (*Client, error) {
 		return nil, fmt.Errorf("baseURL must start with http:// or https://, got: %s", baseURL)
 	}
 
-	privKey, err := loadPrivateKey(keyPath)
+	privKey, err := LoadPrivateKey(keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load private key: %w", err)
 	}
 
 	return &Client{
-		BaseURL:    strings.TrimSuffix(baseURL, "/"),
-		AccessKey:  accessKey,
-		PrivateKey: privKey,
+		BaseURL: strings.TrimSuffix(baseURL, "/"),
+		Credentials: AuthCredentials{
+			PrivateKey: privKey,
+			AccessKey:  accessKey,
+		},
 		HTTPClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: 30 * time.Second,
 		},
 	}, nil
 }
@@ -72,13 +66,14 @@ func (c *Client) DoRequest(method, path string, body io.Reader) ([]byte, error) 
 
 	log.Println(pathWithoutQuery)
 
-	sig, err := c.signMessage(method, pathWithoutQuery, timestamp)
+	sig, err := c.Credentials.SignMessage(method, pathWithoutQuery, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("signing error: %w", err)
 	}
 
 	// 3. Create Request
 	url := c.BaseURL + path
+	log.Println(url)
 
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
@@ -86,7 +81,7 @@ func (c *Client) DoRequest(method, path string, body io.Reader) ([]byte, error) 
 	}
 
 	// 4. Set Headers
-	req.Header.Set("KALSHI-ACCESS-KEY", c.AccessKey)
+	req.Header.Set("KALSHI-ACCESS-KEY", c.Credentials.AccessKey)
 	req.Header.Set("KALSHI-ACCESS-SIGNATURE", sig)
 	req.Header.Set("KALSHI-ACCESS-TIMESTAMP", timestamp)
 	req.Header.Set("Content-Type", "application/json")
@@ -110,61 +105,6 @@ func (c *Client) DoRequest(method, path string, body io.Reader) ([]byte, error) 
 	return respBody, nil
 }
 
-// signMessage implements the RSA-PSS signing logic required by Kalshi
-func (c *Client) signMessage(method, path, timestamp string) (string, error) {
-	// Message format: timestamp + method + path
-	msg := timestamp + method + path
-
-	hashed := sha256.Sum256([]byte(msg))
-
-	opts := &rsa.PSSOptions{
-		SaltLength: rsa.PSSSaltLengthEqualsHash,
-		Hash:       crypto.SHA256,
-	}
-
-	// Sign the hashed message
-	// Pass crypto.SHA256 as the hash parameter to indicate what hash was used
-	signature, err := rsa.SignPSS(rand.Reader, c.PrivateKey, crypto.SHA256, hashed[:], opts)
-	if err != nil {
-		log.Printf("[Kalshi] Signing error: %v", err)
-		return "", err
-	}
-
-	sigBase64 := base64.StdEncoding.EncodeToString(signature)
-
-	return sigBase64, nil
-}
-
-// loadPrivateKey parses a .key PEM file into an RSA Private Key
-func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
-	keyData, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	block, _ := pem.Decode(keyData)
-	if block == nil {
-		return nil, errors.New("failed to decode PEM block")
-	}
-
-	// Try PKCS8 (standard for modern keys)
-	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		// Fallback to PKCS1
-		key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse RSA private key: %v", err)
-		}
-	}
-
-	rsaKey, ok := key.(*rsa.PrivateKey)
-	if !ok {
-		return nil, errors.New("not an RSA private key")
-	}
-
-	return rsaKey, nil
-}
-
 type BalanceResponse struct {
 	Balance int64 `json:"balance"`
 }
@@ -177,6 +117,17 @@ type APIResponse struct {
 type MarketsResponse struct {
 	Markets []types.SimplifiedMarket `json:"markets"`
 	Cursor  string                   `json:"cursor"`
+}
+
+type EventsAPIResponse struct {
+	Events []types.EventData `json:"events"`
+	Cursor string            `json:"cursor"`
+}
+
+type EventsResponse struct {
+	Events     []types.SimplifiedEvent `json:"events"`
+	Cursor     string                  `json:"cursor"`
+	Milestones []interface{}           `json:"milestones"`
 }
 
 func (c *Client) GetBalance() (int64, error) {
@@ -193,7 +144,7 @@ func (c *Client) GetBalance() (int64, error) {
 	return res.Balance, nil
 }
 
-func (c *Client) GetMarkets(limit int, cursor string, status string) (*MarketsResponse, error) {
+func (c *Client) GetMarkets(limit int, cursor string, mveFilter string, minCloseTs int64, maxCloseTs int64) (*MarketsResponse, error) {
 	// Build query parameters
 	path := "/trade-api/v2/markets"
 	params := []string{}
@@ -203,12 +154,35 @@ func (c *Client) GetMarkets(limit int, cursor string, status string) (*MarketsRe
 	}
 
 	if cursor != "" {
-		params = append(params, fmt.Sprintf("cursor=%s", cursor))
+		params = append(params, fmt.Sprintf("cursor=%s", url.QueryEscape(cursor)))
 	}
 
-	if status != "" {
-		params = append(params, fmt.Sprintf("status=%s", status))
+	if mveFilter != "" {
+		params = append(params, fmt.Sprintf("mve_filter=%s", url.QueryEscape(mveFilter)))
 	}
+
+	// Set status to open to ensure markets are currently open for betting
+	params = append(params, "status=open")
+
+	// Use provided timestamps or calculate defaults
+	var minCloseTime, maxCloseTime int64
+	if minCloseTs > 0 && maxCloseTs > 0 {
+		minCloseTime = minCloseTs
+		maxCloseTime = maxCloseTs
+	} else if minCloseTs > 0 {
+		// Only min provided
+		minCloseTime = minCloseTs
+		maxCloseTime = time.Now().Add(5 * 365 * 24 * time.Hour).Unix() // 5 years default cap
+	} else {
+		// Default: markets should settle between 12 hours and 7 days from now
+		now := time.Now()
+		minCloseTime = now.Add(12 * time.Hour).Unix()
+		maxCloseTime = now.Add(7 * 24 * time.Hour).Unix()
+	}
+
+	// Format as Unix epoch seconds
+	params = append(params, fmt.Sprintf("min_close_ts=%d", minCloseTime))
+	params = append(params, fmt.Sprintf("max_close_ts=%d", maxCloseTime))
 
 	if len(params) > 0 {
 		path = path + "?" + strings.Join(params, "&")
@@ -229,17 +203,247 @@ func (c *Client) GetMarkets(limit int, cursor string, status string) (*MarketsRe
 
 	for i, m := range fullResponse.Markets {
 		simplified[i] = types.SimplifiedMarket{
-			Ticker:      m.Ticker,
-			EventTicker: m.EventTicker,
-			Title:       m.Title,
-			YesAsk:      m.YesAsk,
-			NoAsk:       m.NoAsk,
-			YesSubTitle: m.YesSubTitle,
-			NoSubTitle:  m.NoSubTitle,
-			Status:      m.Status,
+			Ticker:        m.Ticker,
+			EventTicker:   m.EventTicker,
+			Title:         m.Title,
+			Subtitle:      m.Subtitle,
+			NoBidDollars:  m.YesBidDollars,
+			YesBidDollars: m.NoBidDollars,
+			YesAsk:        m.YesAsk,
+			NoAsk:         m.NoAsk,
+			YesSubTitle:   m.YesSubTitle,
+			NoSubTitle:    m.NoSubTitle,
+			Status:        m.Status,
+			CloseTime:     m.CloseTime,
+			YesAskDollars: m.YesAskDollars,
+			NoAskDollars:  m.NoAskDollars,
 		}
 	}
 
+	return &MarketsResponse{
+		Markets: simplified,
+		Cursor:  fullResponse.Cursor,
+	}, nil
+}
+
+func (c *Client) GetEvent(eventTicker string) (*types.SimplifiedEvent, error) {
+	path := fmt.Sprintf("/trade-api/v2/events/%s?with_nested_markets=true", url.PathEscape(eventTicker))
+
+	data, err := c.DoRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var fullResponse struct {
+		Event types.EventData `json:"event"`
+	}
+	if err := json.Unmarshal(data, &fullResponse); err != nil {
+		return nil, err
+	}
+
+	e := fullResponse.Event
+
+	// Simplify nested markets
+	simplifiedMarkets := make([]types.SimplifiedMarket, len(e.Markets))
+	for j, m := range e.Markets {
+		simplifiedMarkets[j] = types.SimplifiedMarket{
+			Ticker:        m.Ticker,
+			EventTicker:   m.EventTicker,
+			Title:         m.Title,
+			Subtitle:      m.Subtitle,
+			NoBidDollars:  m.YesBidDollars,
+			YesBidDollars: m.NoBidDollars,
+			YesAsk:        m.YesAsk,
+			NoAsk:         m.NoAsk,
+			YesSubTitle:   m.YesSubTitle,
+			NoSubTitle:    m.NoSubTitle,
+			Status:        m.Status,
+			CloseTime:     m.CloseTime,
+			YesAskDollars: m.YesAskDollars,
+			NoAskDollars:  m.NoAskDollars,
+		}
+	}
+
+	simplifiedEvent := &types.SimplifiedEvent{
+		AvailableOnBrokers:   e.AvailableOnBrokers,
+		Category:             e.Category,
+		CollateralReturnType: e.CollateralReturnType,
+		EventTicker:          e.EventTicker,
+		ExpirationTime:       e.ExpirationTime,
+		MutuallyExclusive:    e.MutuallyExclusive,
+		SeriesTicker:         e.SeriesTicker,
+		StrikePeriod:         e.StrikePeriod,
+		SubTitle:             e.SubTitle,
+		Title:                e.Title,
+		Markets:              simplifiedMarkets,
+	}
+
+	return simplifiedEvent, nil
+}
+
+func (c *Client) GetEvents(limit int, cursor string) (*EventsResponse, error) {
+	// Limit validation - max 200
+	if limit > 200 {
+		limit = 200
+	}
+	if limit <= 0 {
+		limit = 100 // default
+	}
+
+	// Build query parameters
+	path := "/trade-api/v2/events"
+	params := []string{}
+	log.Println("test")
+
+	params = append(params, fmt.Sprintf("limit=%d", limit))
+
+	// Add with_nested_markets=true to get markets inline and avoid N+1 queries
+	params = append(params, "with_nested_markets=true")
+
+	log.Printf("Cursor: %s", cursor)
+	if cursor != "" {
+		params = append(params, fmt.Sprintf("cursor=%s", url.QueryEscape(cursor)))
+	}
+
+	// Set min_close_ts to current timestamp
+	minCloseTs := time.Now().Unix()
+	params = append(params, fmt.Sprintf("min_close_ts=%d", minCloseTs))
+
+	if len(params) > 0 {
+		path = path + "?" + strings.Join(params, "&")
+	}
+
+	log.Println(path)
+	data, err := c.DoRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var fullResponse EventsAPIResponse
+	if err := json.Unmarshal(data, &fullResponse); err != nil {
+		return nil, err
+	}
+
+	// Simplify the events to only return required fields
+	simplified := make([]types.SimplifiedEvent, len(fullResponse.Events))
+	for i, e := range fullResponse.Events {
+		// Simplify nested markets
+		simplifiedMarkets := make([]types.SimplifiedMarket, len(e.Markets))
+		for j, m := range e.Markets {
+			simplifiedMarkets[j] = types.SimplifiedMarket{
+				Ticker:        m.Ticker,
+				EventTicker:   m.EventTicker,
+				Title:         m.Title,
+				NoBidDollars:  m.YesBidDollars,
+				YesBidDollars: m.NoBidDollars,
+				YesAsk:        m.YesAsk,
+				NoAsk:         m.NoAsk,
+				YesSubTitle:   m.YesSubTitle,
+				NoSubTitle:    m.NoSubTitle,
+				Status:        m.Status,
+				CloseTime:     m.CloseTime,
+				YesAskDollars: m.YesAskDollars,
+				NoAskDollars:  m.NoAskDollars,
+			}
+		}
+
+		simplified[i] = types.SimplifiedEvent{
+			AvailableOnBrokers:   e.AvailableOnBrokers,
+			Category:             e.Category,
+			CollateralReturnType: e.CollateralReturnType,
+			EventTicker:          e.EventTicker,
+			ExpirationTime:       e.ExpirationTime,
+			MutuallyExclusive:    e.MutuallyExclusive,
+			SeriesTicker:         e.SeriesTicker,
+			StrikePeriod:         e.StrikePeriod,
+			SubTitle:             e.SubTitle,
+			Title:                e.Title,
+			Markets:              simplifiedMarkets,
+		}
+	}
+
+	return &EventsResponse{
+		Events:     simplified,
+		Cursor:     fullResponse.Cursor,
+		Milestones: []any{},
+	}, nil
+}
+
+func (c *Client) GetMarketsByEvent(eventTicker string, limit int, cursor string, mveFilter string, minCloseTs int64, maxCloseTs int64) (*MarketsResponse, error) {
+	// Build query parameters
+	path := "/trade-api/v2/markets"
+	params := []string{}
+
+	// Add event_ticker as required parameter
+	params = append(params, fmt.Sprintf("event_ticker=%s", url.QueryEscape(eventTicker)))
+
+	if limit > 0 {
+		params = append(params, fmt.Sprintf("limit=%d", limit))
+	}
+
+	if cursor != "" {
+		params = append(params, fmt.Sprintf("cursor=%s", url.QueryEscape(cursor)))
+	}
+
+	params = append(params, "mve_filter=exclude")
+
+	// Use provided timestamps or calculate defaults
+	var minCloseTime, maxCloseTime int64
+	if minCloseTs > 0 && maxCloseTs > 0 {
+		minCloseTime = minCloseTs
+		maxCloseTime = maxCloseTs
+	} else if minCloseTs > 0 {
+		// Only min provided
+		minCloseTime = minCloseTs
+		maxCloseTime = time.Now().Add(5 * 365 * 24 * time.Hour).Unix() // 5 years default cap
+	} else {
+		// Default: markets should settle between 12 hours and 7 days from now
+		now := time.Now()
+		minCloseTime = now.Add(12 * time.Hour).Unix()
+		maxCloseTime = now.Add(7 * 24 * time.Hour).Unix()
+	}
+
+	// Format as Unix epoch seconds
+	params = append(params, fmt.Sprintf("min_close_ts=%d", minCloseTime))
+	params = append(params, fmt.Sprintf("max_close_ts=%d", maxCloseTime))
+
+	if len(params) > 0 {
+		path = path + "?" + strings.Join(params, "&")
+	}
+
+	log.Printf("[Kalshi] Fetching markets by event with path: %s", path)
+	data, err := c.DoRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var fullResponse APIResponse
+	if err := json.Unmarshal(data, &fullResponse); err != nil {
+		return nil, err
+	}
+
+	simplified := make([]types.SimplifiedMarket, len(fullResponse.Markets))
+
+	for i, m := range fullResponse.Markets {
+		simplified[i] = types.SimplifiedMarket{
+			Ticker:        m.Ticker,
+			EventTicker:   m.EventTicker,
+			Title:         m.Title,
+			Subtitle:      m.Subtitle,
+			NoBidDollars:  m.YesBidDollars,
+			YesBidDollars: m.NoBidDollars,
+			YesAsk:        m.YesAsk,
+			NoAsk:         m.NoAsk,
+			YesSubTitle:   m.YesSubTitle,
+			NoSubTitle:    m.NoSubTitle,
+			Status:        m.Status,
+			CloseTime:     m.CloseTime,
+			YesAskDollars: m.YesAskDollars,
+			NoAskDollars:  m.NoAskDollars,
+		}
+	}
+
+	log.Printf("Cursor 123: %s", fullResponse.Cursor)
 	return &MarketsResponse{
 		Markets: simplified,
 		Cursor:  fullResponse.Cursor,

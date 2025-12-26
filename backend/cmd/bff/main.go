@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"backend/internal/bff"
+	"backend/internal/config"
 	"backend/internal/db"
 	"github.com/gin-gonic/gin"
 )
@@ -16,6 +17,9 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
+	// Seed database with providers
+	config.SeedProviders(database)
+
 	// 2. Initialize Handler
 	managerURL := os.Getenv("MANAGER_URL")
 	h := bff.NewHandler(database, managerURL)
@@ -25,8 +29,8 @@ func main() {
 
 	// Enable CORS for frontend development
 	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
@@ -38,11 +42,10 @@ func main() {
 	// 4. Routes
 	api := r.Group("/api/v1")
 	{
-		api.GET("/opportunities", h.GetOpportunities)
-		api.GET("/providers", h.GetProviders)
 		api.GET("/balance", h.GetTotalBalance)
 		api.GET("/markets", h.GetMarkets)
-		api.POST("/trader/killswitch", h.ToggleTrading)
+		api.GET("/markets/by-event", h.GetMarketsByEvent)
+		api.GET("/events", h.GetEvents)
 	}
 
 	// 5. Start Server

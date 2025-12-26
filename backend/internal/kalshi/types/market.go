@@ -60,8 +60,8 @@ type MarketData struct {
 	FeeWaiverExpirationTime time.Time    `json:"fee_waiver_expiration_time"`
 	EarlyCloseCondition     string       `json:"early_close_condition"`
 	StrikeType              string       `json:"strike_type"`
-	FloorStrike             float32      `json:"floor_strike"`
-	CapStrike               int          `json:"cap_strike"`
+	FloorStrike             float64      `json:"floor_strike"`
+	CapStrike               float64      `json:"cap_strike"`
 	FunctionalStrike        string       `json:"functional_strike"`
 	CustomStrike            interface{}  `json:"custom_strike"`
 	MveCollectionTicker     string       `json:"mve_collection_ticker"`
@@ -82,14 +82,19 @@ type MveLeg struct {
 }
 
 type SimplifiedMarket struct {
-	Ticker      string `json:"ticker"`
-	EventTicker string `json:"event_ticker"`
-	Title       string `json:"title"`
-	YesSubTitle string `json:"yes_sub_title"`
-	NoSubTitle  string `json:"no_sub_title"`
-	YesBid      int    `json:"yes_bid"`
-	NoBid       int    `json:"no_bid"`
-	YesAsk      int    `json:"yes_ask"`
-	NoAsk       int    `json:"no_ask"`
-	Status      string `json:"status"`
+	Ticker        string    `json:"ticker"`
+	EventTicker   string    `json:"event_ticker"`
+	Title         string    `json:"title"`
+	Subtitle      string    `json:"subtitle"`
+	YesSubTitle   string    `json:"yes_sub_title"`
+	NoSubTitle    string    `json:"no_sub_title"`
+	YesBidDollars string    `json:"yes_bid_dollars"`
+	NoBidDollars  string    `json:"no_bid_dollars"`
+	YesAsk        int       `json:"yes_ask"`
+	YesAskDollars string    `json:"yes_ask_dollars"`
+	NoAsk         int       `json:"no_ask"`
+	NoAskDollars  string    `json:"no_ask_dollars"`
+	Status        string    `json:"status"`
+	Category      string    `json:"category"`
+	CloseTime     time.Time `json:"close_time"`
 }

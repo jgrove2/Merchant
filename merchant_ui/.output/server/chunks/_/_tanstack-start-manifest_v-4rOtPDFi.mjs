@@ -1,0 +1,4 @@
+const tsrStartManifest = () => ({ "routes": { "__root__": { "filePath": "/home/justin/Projects/Merchant/merchant_ui/src/routes/__root.tsx", "children": ["/", "/markets"], "preloads": ["/assets/main-C10aOch1.js"], "assets": [{ "tag": "link", "attrs": { "rel": "stylesheet", "href": "/assets/main-DOl8cZyQ.css", "type": "text/css" } }] }, "/": { "filePath": "/home/justin/Projects/Merchant/merchant_ui/src/routes/index.tsx", "assets": [{ "tag": "link", "attrs": { "rel": "stylesheet", "href": "/assets/main-DOl8cZyQ.css", "type": "text/css" } }], "preloads": ["/assets/index-CLrTff2m.js"] }, "/markets": { "filePath": "/home/justin/Projects/Merchant/merchant_ui/src/routes/markets.tsx", "assets": [{ "tag": "link", "attrs": { "rel": "stylesheet", "href": "/assets/main-DOl8cZyQ.css", "type": "text/css" } }], "preloads": ["/assets/markets-wfy8Rs1Z.js"] } }, "clientEntry": "/assets/main-C10aOch1.js" });
+export {
+  tsrStartManifest
+};

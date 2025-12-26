@@ -8,6 +8,7 @@ import { TanStackDevtools } from '@tanstack/react-devtools'
 import { useEffect } from 'react'
 
 import Header from '../components/Header'
+import { TooltipProvider } from '../components/ui/tooltip'
 
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools'
 
@@ -59,8 +60,14 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <Header />
-        {children}
+        <TooltipProvider>
+          <div className="flex min-h-screen w-full flex-col">
+            <Header />
+            <main className="flex-1">
+              {children}
+            </main>
+          </div>
+        </TooltipProvider>
         <TanStackDevtools
           config={{
             position: 'bottom-right',

@@ -7,13 +7,13 @@ export const Route = createFileRoute("/")({
 
 function Dashboard() {
   return (
-    <div>
-      <div className="mx-auto max-w-7xl space-y-8 px-6 py-10">
+    <div className="flex flex-1 flex-col gap-4 p-4">
+      <div className="mx-auto w-full max-w-7xl space-y-8">
         <header>
           <h1 className="text-3xl font-bold tracking-tight">
             Arbitrage Dashboard
           </h1>
-          <p>
+          <p className="text-muted-foreground">
             Polymarket ↔ Kalshi performance overview
           </p>
         </header>

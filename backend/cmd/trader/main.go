@@ -44,5 +44,4 @@ func main() {
 
 func executeTrade(opportunityID uint) {
 	// TODO: Implement the algorithm to commit the trade to Kalshi
-	log.Printf("Executing trade for opportunity: %d", opportunityID)
 }
