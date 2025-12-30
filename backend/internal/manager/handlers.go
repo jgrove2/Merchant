@@ -386,19 +386,26 @@ func (h *Handler) SyncEvents() {
 		// 4. DB Operations (Upsert Events & Markets)
 		// We do this in a transaction to ensure consistency
 		if len(eventsToUpsert) > 0 {
-			err := h.upsertData(eventsToUpsert, marketsToUpsert)
+			err := h.upsertEventsData(eventsToUpsert)
 			if err != nil {
-				log.Printf("Failed to upsert batch: %v", err)
+				log.Printf("Failed to upsert events batch: %v", err)
+				continue
+			}
+		}
+
+		if len(marketsToUpsert) > 0 {
+			err := h.upsertMarketData(marketsToUpsert)
+			if err != nil {
+				log.Printf("Failed to upsert markets batch: %v", err)
 				continue
 			}
 		}
 
 		// 5. Update Embeddings (Outside Transaction)
-		// We should update embeddings for ALL markets in the batch, not just fresh ones or active ones,
-		// unless we specifically want to exclude them. The previous logic was filtering by 'active'.
-		// Let's re-examine if we are filtering too aggressively.
-		if h.EmbeddingService != nil && len(marketsToUpsert) > 0 {
-			h.updateMarketEmbeddings(marketsToUpsert)
+		if h.EmbeddingService != nil {
+			if len(marketsToUpsert) > 0 {
+				h.updateMarketEmbeddings(marketsToUpsert)
+			}
 		}
 
 		totalFetched += len(resp.Events)
@@ -477,6 +484,9 @@ func (h *Handler) processEventBatch(apiEvents []kalshiTypes.SimplifiedEvent, pro
 			}
 		}
 
+		// If no future close time found, fallback to expiration time or now (though 0 time is fine too)
+		// But let's keep it zero if none found to indicate no active markets closing soon.
+
 		expTime, _ := time.Parse(time.RFC3339, e.ExpirationTime)
 
 		dbEvents = append(dbEvents, db.Event{
@@ -521,18 +531,8 @@ func (h *Handler) processEventBatch(apiEvents []kalshiTypes.SimplifiedEvent, pro
 	return dbEvents, dbMarkets
 }
 
-func (h *Handler) upsertData(events []db.Event, markets []db.Market) error {
+func (h *Handler) upsertMarketData(markets []db.Market) error {
 	return h.DB.Transaction(func(tx *gorm.DB) error {
-		// Upsert Events
-		if err := tx.Clauses(clause.OnConflict{
-			Columns: []clause.Column{{Name: "provider_id"}, {Name: "external_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{
-				"title", "subtitle", "category", "expiration_time", "closest_market_close_time", "updated_at",
-			}),
-		}).Create(&events).Error; err != nil {
-			return err
-		}
-
 		// Upsert Markets
 		if len(markets) > 0 {
 			if err := tx.Clauses(clause.OnConflict{
@@ -544,6 +544,22 @@ func (h *Handler) upsertData(events []db.Event, markets []db.Market) error {
 				return err
 			}
 		}
+		return nil
+	})
+}
+
+func (h *Handler) upsertEventsData(events []db.Event) error {
+	return h.DB.Transaction(func(tx *gorm.DB) error {
+		// Upsert Events
+		if err := tx.Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "provider_id"}, {Name: "external_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{
+				"title", "subtitle", "category", "expiration_time", "closest_market_close_time", "updated_at",
+			}),
+		}).Create(&events).Error; err != nil {
+			return err
+		}
+
 		return nil
 	})
 }
