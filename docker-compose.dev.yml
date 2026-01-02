@@ -1,0 +1,44 @@
+services:
+  # 1. Redis
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: always
+
+  # 2. Model Downloader (Init Container)
+  # Checks if model exists in volume, downloads if not.
+  model-downloader:
+    image: curlimages/curl
+    user: root
+    volumes:
+      - llm_models:/models
+    command: >
+      /bin/sh -c "
+      echo 'Checking for model...';
+      if [ ! -f /models/llama-3.2-1b.gguf ]; then
+        echo 'Model not found. Downloading Llama-3.2-1B-Instruct (Q4_K_M)...';
+        curl -L -o /models/llama-3.2-1b.gguf https://huggingface.co/hugging-quants/Llama-3.2-1B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-1b-instruct-q4_k_m.gguf;
+        echo 'Download complete.';
+      else
+        echo 'Model exists. Skipping download.';
+      fi"
+
+  # 3. SLM Server (llama.cpp)
+  slm:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    ports:
+      - "8088:8080" # Map container 8080 to host 8088 to avoid conflicts
+    volumes:
+      - llm_models:/models
+    environment:
+      - LLAMA_ARG_MODEL=/models/llama-3.2-1b.gguf
+      - LLAMA_ARG_CTX_SIZE=4096
+      - LLAMA_ARG_N_GPU_LAYERS=0 # Force CPU for compatibility
+      - LLAMA_ARG_HOST=0.0.0.0
+    depends_on:
+      model-downloader:
+        condition: service_completed_successfully
+
+volumes:
+  llm_models:

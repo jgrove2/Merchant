@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	// "log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -64,7 +64,7 @@ func (c *Client) DoRequest(method, path string, body io.Reader) ([]byte, error) 
 	// 2. Generate Signature (Path must be stripped of query params for signing)
 	pathWithoutQuery := strings.Split(path, "?")[0]
 
-	log.Println(pathWithoutQuery)
+	// log.Println(pathWithoutQuery)
 
 	sig, err := c.Credentials.SignMessage(method, pathWithoutQuery, timestamp)
 	if err != nil {
@@ -73,7 +73,7 @@ func (c *Client) DoRequest(method, path string, body io.Reader) ([]byte, error) 
 
 	// 3. Create Request
 	url := c.BaseURL + path
-	log.Println(url)
+	// log.Println(url)
 
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
@@ -188,7 +188,7 @@ func (c *Client) GetMarkets(limit int, cursor string, mveFilter string, minClose
 		path = path + "?" + strings.Join(params, "&")
 	}
 
-	log.Printf("[Kalshi] Fetching markets with path: %s", path)
+	// log.Printf("[Kalshi] Fetching markets with path: %s", path)
 	data, err := c.DoRequest("GET", path, nil)
 	if err != nil {
 		return nil, err
@@ -293,14 +293,14 @@ func (c *Client) GetEvents(limit int, cursor string) (*EventsResponse, error) {
 	// Build query parameters
 	path := "/trade-api/v2/events"
 	params := []string{}
-	log.Println("test")
+	// log.Println("test")
 
 	params = append(params, fmt.Sprintf("limit=%d", limit))
 
 	// Add with_nested_markets=true to get markets inline and avoid N+1 queries
 	params = append(params, "with_nested_markets=true")
 
-	log.Printf("Cursor: %s", cursor)
+	// log.Printf("Cursor: %s", cursor)
 	if cursor != "" {
 		params = append(params, fmt.Sprintf("cursor=%s", url.QueryEscape(cursor)))
 	}
@@ -313,7 +313,7 @@ func (c *Client) GetEvents(limit int, cursor string) (*EventsResponse, error) {
 		path = path + "?" + strings.Join(params, "&")
 	}
 
-	log.Println(path)
+	// log.Println(path)
 	data, err := c.DoRequest("GET", path, nil)
 	if err != nil {
 		return nil, err
@@ -411,7 +411,7 @@ func (c *Client) GetMarketsByEvent(eventTicker string, limit int, cursor string,
 		path = path + "?" + strings.Join(params, "&")
 	}
 
-	log.Printf("[Kalshi] Fetching markets by event with path: %s", path)
+	// log.Printf("[Kalshi] Fetching markets by event with path: %s", path)
 	data, err := c.DoRequest("GET", path, nil)
 	if err != nil {
 		return nil, err
@@ -443,9 +443,41 @@ func (c *Client) GetMarketsByEvent(eventTicker string, limit int, cursor string,
 		}
 	}
 
-	log.Printf("Cursor 123: %s", fullResponse.Cursor)
+	// log.Printf("Cursor 123: %s", fullResponse.Cursor)
 	return &MarketsResponse{
 		Markets: simplified,
 		Cursor:  fullResponse.Cursor,
 	}, nil
+}
+
+// GetMarketsForEventNextMonth retrieves all markets for a specific event that close within the next month.
+// It handles pagination automatically to return the complete list.
+func (c *Client) GetMarketsForEventNextMonth(eventTicker string) ([]types.SimplifiedMarket, error) {
+	var allMarkets []types.SimplifiedMarket
+	cursor := ""
+	limit := 100 // Maximize batch size for efficiency
+
+	// Time window: Now until 1 month from now
+	now := time.Now()
+	minCloseTs := now.Unix()
+	maxCloseTs := now.AddDate(0, 1, 0).Unix() // Add 1 month
+
+	for {
+		// We use GetMarketsByEvent which already handles the API call structure
+		// Passing "" for mveFilter to use the default behavior or the function's internal hardcoding
+		// Note: GetMarketsByEvent currently forces "mve_filter=exclude" internally.
+		resp, err := c.GetMarketsByEvent(eventTicker, limit, cursor, "", minCloseTs, maxCloseTs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch markets page: %w", err)
+		}
+
+		allMarkets = append(allMarkets, resp.Markets...)
+
+		if resp.Cursor == "" {
+			break
+		}
+		cursor = resp.Cursor
+	}
+
+	return allMarkets, nil
 }

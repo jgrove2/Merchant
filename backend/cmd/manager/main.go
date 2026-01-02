@@ -12,6 +12,8 @@ import (
 	"backend/internal/embeddings"
 	"backend/internal/kalshi"
 	"backend/internal/manager"
+	"backend/internal/slm"
+	"backend/internal/sync"
 
 	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	"github.com/gin-gonic/gin"
@@ -51,10 +53,30 @@ func main() {
 		defer embService.Close()
 	}
 
-	// 4. Initialize Handler
-	h := manager.NewHandler(database, kClient, embService)
+	// 4. Initialize Redis
+	redisClient, err := db.NewRedis(os.Getenv("REDIS_URL"))
+	if err != nil {
+		log.Printf("Warning: Failed to init Redis: %v. Caching will be disabled.", err)
+	}
 
-	// 5. Start Manager API
+	// 5. Initialize SLM Service
+	// Use SLM_MODEL env var, default to qwen3:14b if not set
+	modelName := os.Getenv("SLM_MODEL")
+	if modelName == "" {
+		modelName = "qwen3:14b"
+	}
+	slmService, err := slm.NewService(modelName)
+	if err != nil {
+		log.Printf("Warning: Failed to init SLM service: %v", err)
+	}
+
+	// 6. Initialize Syncer
+	syncer := sync.NewSyncer(database, kClient, embService, slmService, redisClient)
+
+	// 7. Initialize Handler
+	h := manager.NewHandler(database, kClient, embService, syncer)
+
+	// 8. Start Manager API
 	go func() {
 		r := gin.Default()
 		r.GET("/providers/:name/balance", h.GetProviderBalance)
@@ -70,7 +92,7 @@ func main() {
 		}
 	}()
 
-	// 6. Setup Context for graceful shutdown
+	// 9. Setup Context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -83,7 +105,7 @@ func main() {
 		cancel()
 	}()
 
-	// 7. Execution Loop
+	// 10. Execution Loop
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 

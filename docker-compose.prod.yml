@@ -1,0 +1,135 @@
+services:
+  # 1. Redis for Caching
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - merchant-network
+
+  # 2. Model Downloader (Init Container)
+  # Downloads the GGUF model to a shared volume if not present
+  model-downloader:
+    image: curlimages/curl:latest
+    user: root
+    command: >
+      /bin/sh -c "
+      if [ ! -f /models/llama-3.2-1b.gguf ]; then
+        echo 'Downloading Llama-3.2-1B-Instruct-Q4_K_M.gguf...';
+        curl -L -o /models/llama-3.2-1b.gguf https://huggingface.co/hugging-quants/Llama-3.2-1B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-1b-instruct-q4_k_m.gguf;
+        echo 'Download complete.';
+      else
+        echo 'Model already exists.';
+      fi"
+    volumes:
+      - model_data:/models
+    networks:
+      - merchant-network
+
+  # 3. SLM Service (Llama.cpp Server)
+  slm:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    ports:
+      - "8080:8080"
+    volumes:
+      - model_data:/models
+    environment:
+      - LLAMA_ARG_MODEL=/models/llama-3.2-1b.gguf
+      - LLAMA_ARG_CTX_SIZE=4096
+      - LLAMA_ARG_N_GPU_LAYERS=99 # Use GPU if available
+    depends_on:
+      model-downloader:
+        condition: service_completed_successfully
+    networks:
+      - merchant-network
+
+  # 4. Backend Manager Service
+  manager:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      - DATABASE_URL=/data/merchant.db
+      - REDIS_URL=redis:6379
+      - SLM_URL=http://slm:8080/v1
+      - KALSHI_BASE_URL=${KALSHI_BASE_URL}
+      - KALSHI_API_KEY=${KALSHI_API_KEY}
+      - KALSHI_KEY_PATH=/secrets/kalshi.key
+    volumes:
+      - ./data:/data
+      - ${KALSHI_KEY_PATH}:/secrets/kalshi.key:ro
+    depends_on:
+      - redis
+      - slm
+    networks:
+      - merchant-network
+    command: ["/app/manager"]
+
+  # 5. Backend BFF (Backend for Frontend) Service
+  bff:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080" # Exposed to host
+    environment:
+      - DATABASE_URL=/data/merchant.db
+      - REDIS_URL=redis:6379
+      - MANAGER_URL=http://manager:8081
+    volumes:
+      - ./data:/data
+    depends_on:
+      - manager
+      - redis
+    networks:
+      - merchant-network
+    command: ["/app/bff"]
+  
+  # 6. Backend Trader Service
+  trader:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    # No ports exposed, runs in background
+    environment:
+      - DATABASE_URL=/data/merchant.db
+      - REDIS_URL=redis:6379
+      - MANAGER_URL=http://manager:8081
+      - KALSHI_BASE_URL=${KALSHI_BASE_URL}
+      - KALSHI_API_KEY=${KALSHI_API_KEY}
+      - KALSHI_KEY_PATH=/secrets/kalshi.key
+    volumes:
+      - ./data:/data
+      - ${KALSHI_KEY_PATH}:/secrets/kalshi.key:ro
+    depends_on:
+      - manager
+      - redis
+    networks:
+      - merchant-network
+    command: ["/app/trader"]
+
+  # 7. Frontend
+  frontend:
+    build:
+      context: ./merchant_ui
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NUXT_PUBLIC_API_BASE=/api
+    depends_on:
+      - bff
+    networks:
+      - merchant-network
+
+networks:
+  merchant-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+  model_data:

@@ -24,6 +24,8 @@ type Market struct {
 	EventTicker    string `gorm:"index"`                           // The EventTicker from Kalshi
 	Title          string
 	Description    string
+	YesSubTitle    string
+	NoSubTitle     string
 	Status         string    `gorm:"default:'active'"` // active, closed, settled
 	Category       string    // e.g., "Economics", "Politics"
 	LastDataUpdate time.Time // Last time we pulled orderbook data

@@ -9,8 +9,9 @@ services:
       - "8080:8080"
     environment:
       - DATABASE_URL=/data/merchant.db
-      - PORT=8080
+      - SLM_URL=http://ollama:11434/v1
     volumes:
+
       - ./data:/data
     restart: always
 
@@ -22,6 +23,8 @@ services:
     command: /bin/manager
     environment:
       - DATABASE_URL=/data/merchant.db
+      - SLM_URL=http://ollama:11434/v1
+      - SLM_MODEL=qwen3:14b
     volumes:
       - ./data:/data
     restart: always
@@ -43,9 +46,33 @@ services:
   # but this setup runs the dev/preview server for testing.
   frontend:
     build:
-      context: ./frontend
+      context: ./merchant_ui/
     ports:
       - "5173:5173"
     environment:
       - VITE_API_URL=http://localhost:8080
     restart: always
+
+  # 5. Redis (Cache/kv store)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: always
+
+  # 6. Ollama (SLM/LLM)
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_NUM_PARALLEL=2
+    # Pre-pull the model on startup if not present
+    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull qwen3:14b && wait"]
+    restart: always
+
+volumes:
+  ollama_data:
