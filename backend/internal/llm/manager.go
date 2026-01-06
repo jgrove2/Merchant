@@ -17,12 +17,13 @@ const (
 
 // Config holds the configuration for the LLM manager
 type Config struct {
-	Provider        ProviderType
-	Model           string
-	APIKey          string
-	ReasoningEffort string
-	Temperature     float64
-	TopP            *float64
+	Provider            ProviderType
+	Model               string
+	APIKey              string
+	ReasoningEffort     string
+	Temperature         float64
+	TopP                *float64
+	MaxCompletionTokens int
 }
 
 // Service defines the interface for LLM interactions
@@ -62,7 +63,7 @@ func (m *Manager) Connect() (Service, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &groqService{client: client, model: m.config.Model, reasoningEffort: m.config.ReasoningEffort, temperature: m.config.Temperature, topP: m.config.TopP}, nil
+		return &groqService{client: client, model: m.config.Model, reasoningEffort: m.config.ReasoningEffort, temperature: m.config.Temperature, topP: m.config.TopP, maxCompletionTokens: m.config.MaxCompletionTokens}, nil
 	default:
 		return nil, errors.New("unsupported provider")
 	}
@@ -70,15 +71,16 @@ func (m *Manager) Connect() (Service, error) {
 
 // groqService implements the Service interface for Groq
 type groqService struct {
-	client          *groq.Client
-	model           string
-	reasoningEffort string
-	temperature     float64
-	topP            *float64
+	client              *groq.Client
+	model               string
+	reasoningEffort     string
+	temperature         float64
+	topP                *float64
+	maxCompletionTokens int
 }
 
 func (s *groqService) Generate(ctx context.Context, prompt string) (*GenerateResponse, error) {
-	content, usage, err := s.client.SimplePrompt(ctx, s.model, prompt, s.reasoningEffort, s.temperature, s.topP)
+	content, usage, err := s.client.SimplePrompt(ctx, s.model, prompt, s.reasoningEffort, s.temperature, s.topP, s.maxCompletionTokens)
 	if err != nil {
 		return nil, err
 	}

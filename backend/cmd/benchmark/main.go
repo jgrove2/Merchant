@@ -52,6 +52,7 @@ func main() {
 	reasoningEffort := flag.String("reasoning-effort", "", "Reasoning effort (e.g., 'low', 'medium', 'high') - defaults to empty/none")
 	temperature := flag.Float64("temperature", 1.0, "Sampling temperature to use (default: 1.0)")
 	topP := flag.Float64("top-p", -1.0, "Top-p sampling (nucleus sampling) - set to -1 to disable (default: -1)")
+	maxTokens := flag.Int("max-completion-tokens", 8192, "Max tokens to generate (default: 8192)")
 	flag.Parse()
 
 	fmt.Printf("Running benchmark on model: %s\n", *modelName)
@@ -62,6 +63,7 @@ func main() {
 	if *topP != -1.0 {
 		fmt.Printf("Top-P: %.2f\n", *topP)
 	}
+	fmt.Printf("Max Completion Tokens: %d\n", *maxTokens)
 	fmt.Printf("Loading cases from: %s\n", *casesFile)
 
 	// Load test cases
@@ -82,10 +84,11 @@ func main() {
 	passCount := 0
 
 	llmCfg := llm.Config{
-		Provider:        llm.ProviderGroq,
-		Model:           *modelName,
-		ReasoningEffort: *reasoningEffort,
-		Temperature:     *temperature,
+		Provider:            llm.ProviderGroq,
+		Model:               *modelName,
+		ReasoningEffort:     *reasoningEffort,
+		Temperature:         *temperature,
+		MaxCompletionTokens: *maxTokens,
 	}
 	if *topP != -1.0 {
 		llmCfg.TopP = topP

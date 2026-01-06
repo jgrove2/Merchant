@@ -6,13 +6,14 @@ type ChatMessage struct {
 }
 
 type ChatCompletionRequest struct {
-	Model           string        `json:"model"`
-	Messages        []ChatMessage `json:"messages"`
-	Temperature     float64       `json:"temperature,omitempty"`
-	TopP            *float64      `json:"top_p,omitempty"`
-	MaxTokens       int           `json:"max_tokens,omitempty"`
-	Stream          bool          `json:"stream,omitempty"`
-	ReasoningEffort string        `json:"reasoning_effort,omitempty"`
+	Model               string        `json:"model"`
+	Messages            []ChatMessage `json:"messages"`
+	Temperature         float64       `json:"temperature,omitempty"`
+	TopP                *float64      `json:"top_p,omitempty"`
+	MaxTokens           int           `json:"max_tokens,omitempty"`
+	MaxCompletionTokens int           `json:"max_completion_tokens,omitempty"`
+	Stream              bool          `json:"stream,omitempty"`
+	ReasoningEffort     string        `json:"reasoning_effort,omitempty"`
 }
 
 type Usage struct {
