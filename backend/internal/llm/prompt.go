@@ -48,11 +48,12 @@ func (m *Manager) CompareMarkets(ctx context.Context, primaryMarket, comparisonM
 		return nil, fmt.Errorf("failed to connect to LLM provider: %w", err)
 	}
 
-	jsonCompletion, err := service.Generate(ctx, comparePrompt)
+	genResp, err := service.Generate(ctx, comparePrompt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate LLM response: %w", err)
 	}
 
+	jsonCompletion := genResp.Content
 	// log.Printf("[LLM] JSON Output:\n%s\n", jsonCompletion)
 
 	// Clean up response to ensure valid JSON
@@ -81,6 +82,7 @@ func (m *Manager) CompareMarkets(ctx context.Context, primaryMarket, comparisonM
 	// Ensure IDs are set correctly (in case model hallucinated them - usually IDs are not in prompt output schema but good to set on struct)
 	result.PrimaryMarketID = primaryMarket.ID
 	result.ComparisonMarketID = comparisonMarket.ID
+	result.Usage = genResp.Usage
 
 	// Log validation warning if needed, but we don't return error on validation failure per previous pattern if we wanted to be lenient
 	// For now, we assume the unmarshal works. Add specific validation logic here if needed.

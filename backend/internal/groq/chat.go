@@ -28,7 +28,7 @@ func (c *Client) SimplePrompt(
 	prompt string,
 	reasoningEffort string,
 	temperature float64,
-) (string, error) {
+) (string, Usage, error) {
 	resp, err := c.ChatCompletion(ctx, ChatCompletionRequest{
 		Model: model,
 		Messages: []ChatMessage{
@@ -41,12 +41,12 @@ func (c *Client) SimplePrompt(
 		Temperature:     temperature,
 	})
 	if err != nil {
-		return "", err
+		return "", Usage{}, err
 	}
 
 	if len(resp.Choices) == 0 {
-		return "", nil
+		return "", resp.Usage, nil
 	}
 
-	return resp.Choices[0].Message.Content, nil
+	return resp.Choices[0].Message.Content, resp.Usage, nil
 }

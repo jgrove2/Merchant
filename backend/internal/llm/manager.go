@@ -26,7 +26,7 @@ type Config struct {
 
 // Service defines the interface for LLM interactions
 type Service interface {
-	Generate(ctx context.Context, prompt string) (string, error)
+	Generate(ctx context.Context, prompt string) (*GenerateResponse, error)
 }
 
 // Manager handles the creation of LLM connections
@@ -75,6 +75,17 @@ type groqService struct {
 	temperature     float64
 }
 
-func (s *groqService) Generate(ctx context.Context, prompt string) (string, error) {
-	return s.client.SimplePrompt(ctx, s.model, prompt, s.reasoningEffort, s.temperature)
+func (s *groqService) Generate(ctx context.Context, prompt string) (*GenerateResponse, error) {
+	content, usage, err := s.client.SimplePrompt(ctx, s.model, prompt, s.reasoningEffort, s.temperature)
+	if err != nil {
+		return nil, err
+	}
+	return &GenerateResponse{
+		Content: content,
+		Usage: TokenUsage{
+			PromptTokens:     usage.PromptTokens,
+			CompletionTokens: usage.CompletionTokens,
+			TotalTokens:      usage.TotalTokens,
+		},
+	}, nil
 }

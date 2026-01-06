@@ -36,6 +36,7 @@ type Result struct {
 	ActualYesMapping *string
 	ActualNoMapping  *string
 	Duration         time.Duration
+	TokenUsage       llm.TokenUsage
 }
 
 const (
@@ -123,6 +124,7 @@ func main() {
 		} else {
 			r.ActualYesMapping = res.Mapping.PrimaryYes
 			r.ActualNoMapping = res.Mapping.PrimaryNo
+			r.TokenUsage = res.Usage
 
 			// Compare results
 			match := true
@@ -157,9 +159,15 @@ func main() {
 
 	// Calculate statistics
 	var durations []time.Duration
+	var totalPromptTokens, totalCompletionTokens, totalTokens, successfulRequests int
+
 	for _, r := range results {
 		if r.Error == "" { // Only count successful requests for timing
 			durations = append(durations, r.Duration)
+			totalPromptTokens += r.TokenUsage.PromptTokens
+			totalCompletionTokens += r.TokenUsage.CompletionTokens
+			totalTokens += r.TokenUsage.TotalTokens
+			successfulRequests++
 		}
 	}
 	sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
@@ -196,6 +204,16 @@ func main() {
 		fmt.Printf("P90:     %v\n", p90Duration)
 	} else {
 		fmt.Printf("No successful calls to measure timing.\n")
+	}
+
+	fmt.Printf("\n--- Token Usage ---\n")
+	if successfulRequests > 0 {
+		fmt.Printf("Total Input:  %d\n", totalPromptTokens)
+		fmt.Printf("Total Output: %d\n", totalCompletionTokens)
+		fmt.Printf("Total:        %d\n", totalTokens)
+		fmt.Printf("Avg per Req:  %d\n", totalTokens/successfulRequests)
+	} else {
+		fmt.Printf("No successful calls to measure token usage.\n")
 	}
 }
 

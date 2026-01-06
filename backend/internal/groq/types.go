@@ -11,7 +11,13 @@ type ChatCompletionRequest struct {
 	Temperature     float64       `json:"temperature,omitempty"`
 	MaxTokens       int           `json:"max_tokens,omitempty"`
 	Stream          bool          `json:"stream,omitempty"`
-	ReasoningEffort string        `json:"reasoning_effort"`
+	ReasoningEffort string        `json:"reasoning_effort,omitempty"`
+}
+
+type Usage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
 }
 
 type ChatCompletionResponse struct {
@@ -23,4 +29,5 @@ type ChatCompletionResponse struct {
 			Content string `json:"content"`
 		} `json:"message"`
 	} `json:"choices"`
+	Usage Usage `json:"usage"`
 }
