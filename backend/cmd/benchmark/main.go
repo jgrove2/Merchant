@@ -158,6 +158,8 @@ func main() {
 
 				fmt.Printf("\n  %sPrompt Used:%s\n", ColorYellow, ColorReset)
 				fmt.Println(llm.ComparisonPrompt(source, target))
+				fmt.Printf("\n  %sRaw Response:%s\n", ColorYellow, ColorReset)
+				fmt.Println(res.RawResponse)
 				fmt.Println("--------------------------------------------------")
 			}
 		}

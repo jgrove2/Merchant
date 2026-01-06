@@ -22,6 +22,7 @@ type ComparisonResponse struct {
 	PrimaryMarketID    string     `json:"primary_market_id,omitempty"`
 	ComparisonMarketID string     `json:"comparison_market_id,omitempty"`
 	Usage              TokenUsage `json:"usage,omitempty"`
+	RawResponse        string     `json:"-"` // Exclude from JSON marshalling if this struct is ever marshalled
 }
 
 type Market struct {

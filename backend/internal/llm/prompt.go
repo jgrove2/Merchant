@@ -94,6 +94,7 @@ func (m *Manager) CompareMarkets(ctx context.Context, primaryMarket, comparisonM
 	result.PrimaryMarketID = primaryMarket.ID
 	result.ComparisonMarketID = comparisonMarket.ID
 	result.Usage = genResp.Usage
+	result.RawResponse = jsonCompletion
 
 	// Log validation warning if needed, but we don't return error on validation failure per previous pattern if we wanted to be lenient
 	// For now, we assume the unmarshal works. Add specific validation logic here if needed.
