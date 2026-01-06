@@ -11,8 +11,19 @@ import (
 // ComparisonPrompt generates a logic analysis prompt to determine if a Primary
 // market outcome guarantees a specific Comparison market outcome.
 func ComparisonPrompt(primaryInput, comparisonInput Market) string {
-	primaryDesc := fmt.Sprintf("%s (YES: %s, NO: %s)", primaryInput.Title, primaryInput.YesSubTitle, primaryInput.NoSubTitle)
-	comparisonDesc := fmt.Sprintf("%s (YES: %s, NO: %s)", comparisonInput.Title, comparisonInput.YesSubTitle, comparisonInput.NoSubTitle)
+	var primaryDesc string
+	if primaryInput.NoSubTitle != "" {
+		primaryDesc = fmt.Sprintf("%s (YES: %s, NO: %s)", primaryInput.Title, primaryInput.YesSubTitle, primaryInput.NoSubTitle)
+	} else {
+		primaryDesc = fmt.Sprintf("%s (YES: %s)", primaryInput.Title, primaryInput.YesSubTitle)
+	}
+
+	var comparisonDesc string
+	if comparisonInput.NoSubTitle != "" {
+		comparisonDesc = fmt.Sprintf("%s (YES: %s, NO: %s)", comparisonInput.Title, comparisonInput.YesSubTitle, comparisonInput.NoSubTitle)
+	} else {
+		comparisonDesc = fmt.Sprintf("%s (YES: %s)", comparisonInput.Title, comparisonInput.YesSubTitle)
+	}
 	return fmt.Sprintf(`Act as a logic analyst. Evaluate two markets: Primary and Comparison.
 
 	Determine if the Primary outcome 100%% guarantees a specific Comparison outcome. Use null if the result is not guaranteed or logically uncertain.
@@ -68,7 +79,7 @@ func (m *Manager) CompareMarkets(ctx context.Context, primaryMarket, comparisonM
 
 	var result ComparisonResponse
 	if err := json.Unmarshal([]byte(cleaned), &result); err != nil {
-		return nil, fmt.Errorf("failed to parse LLM JSON output: %w. Output was: %s", err, jsonCompletion)
+		return nil, fmt.Errorf("failed to parse LLM JSON output: %w\n\n=== RAW LLM OUTPUT ===\n%s\n======================\n", err, jsonCompletion)
 	}
 
 	// Normalize "null" strings to nil pointers
