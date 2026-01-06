@@ -130,7 +130,7 @@ func (h *Handler) GetEvents(c *gin.Context) {
 
 	cursor := c.Query("cursor")
 
-	response, err := h.KClient.GetEvents(limit, cursor)
+	response, err := h.KClient.GetEvents(limit, cursor, "")
 	if err != nil {
 		log.Println("Error fetching events:", err.Error())
 		c.JSON(500, gin.H{"error": err.Error()})

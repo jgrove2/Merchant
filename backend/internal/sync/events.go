@@ -126,7 +126,7 @@ func (s *Syncer) fetchEventsWithRetry(limit int, cursor string) (*kalshi.EventsR
 		if attempt > 0 {
 			time.Sleep(1 * time.Second)
 		}
-		resp, err = s.KClient.GetEvents(limit, cursor)
+		resp, err = s.KClient.GetEvents(limit, cursor, s.TargetCategory)
 		if err == nil {
 			return resp, nil
 		}

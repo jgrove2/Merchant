@@ -1,0 +1,167 @@
+[
+  {
+    "source_title": "Super Bowl LIX: Chiefs defeat 49ers",
+    "source_yes_sub": "Chiefs Win Game",
+    "source_category": "Sports",
+    "target_title": "Super Bowl LIX: 49ers defeat Chiefs",
+    "target_yes_sub": "49ers Win Game",
+    "target_category": "Sports",
+    "note": "Binary outcome. Super Bowls cannot end in a draw; one team must win.",
+    "expected_source_yes": "comparison_no",
+    "expected_source_no": "comparison_yes"
+  },
+  {
+    "source_title": "Premier League: Liverpool beats Arsenal",
+    "source_yes_sub": "Liverpool Win",
+    "source_category": "Sports",
+    "target_title": "Premier League: Arsenal beats Liverpool",
+    "target_yes_sub": "Arsenal Win",
+    "target_category": "Sports",
+    "note": "Trinary outcome. If Liverpool does NOT win, Arsenal might have won, OR it was a Draw. Therefore Source No -> Null.",
+    "expected_source_yes": "comparison_no",
+    "expected_source_no": null
+  },
+  {
+    "source_title": "Wimbledon Final: Alcaraz beats Djokovic",
+    "source_yes_sub": "Alcaraz Match Winner",
+    "source_category": "Sports",
+    "target_title": "Wimbledon Final: Djokovic beats Alcaraz",
+    "target_yes_sub": "Djokovic Match Winner",
+    "target_category": "Sports",
+    "note": "Binary outcome. Tennis matches cannot end in a draw.",
+    "expected_source_yes": "comparison_no",
+    "expected_source_no": "comparison_yes"
+  },
+  {
+    "source_title": "Tyson Fury defeats Usyk",
+    "source_yes_sub": "Fury Win",
+    "source_category": "Sports",
+    "target_title": "Usyk loses to Tyson Fury",
+    "target_yes_sub": "Usyk Loss",
+    "target_category": "Sports",
+    "note": "Semantic equivalence. Winning a fight is semantically identical to the opponent losing that fight.",
+    "expected_source_yes": "comparison_yes",
+    "expected_source_no": "comparison_no"
+  },
+  {
+    "source_title": "Trump says 'Make America Great Again' during debate",
+    "source_yes_sub": "Utters full phrase",
+    "source_category": "Politics",
+    "target_title": "Trump says the word 'America' during debate",
+    "target_yes_sub": "Utters specific word",
+    "target_category": "Politics",
+    "note": "Substring Containment. You cannot say the phrase without saying the word.",
+    "expected_source_yes": "comparison_yes",
+    "expected_source_no": null
+  },
+  {
+    "source_title": "Trump says 'China' at least 10 times in speech",
+    "source_yes_sub": "Count >= 10",
+    "source_category": "Politics",
+    "target_title": "Trump says 'China' at least 5 times in speech",
+    "target_yes_sub": "Count >= 5",
+    "target_category": "Politics",
+    "note": "Numerical Subset. If he said it 10 times, he automatically satisfied the '5 times' condition.",
+    "expected_source_yes": "comparison_yes",
+    "expected_source_no": null
+  },
+  {
+    "source_title": "Trump's FIRST word in the interview is 'Tremendous'",
+    "source_yes_sub": "First Word = Tremendous",
+    "source_category": "Politics",
+    "target_title": "Trump's FIRST word in the interview is 'Hello'",
+    "target_yes_sub": "First Word = Hello",
+    "target_category": "Politics",
+    "note": "Mutually Exclusive. A specific moment (t=0) can only have one value.",
+    "expected_source_yes": "comparison_no",
+    "expected_source_no": null
+  },
+  {
+    "source_title": "Trump tweets 'I am innocent'",
+    "source_yes_sub": "Tweet exact phrase",
+    "source_category": "Social Media",
+    "target_title": "Trump tweets 'I am guilty'",
+    "target_yes_sub": "Tweet exact phrase",
+    "target_category": "Social Media",
+    "note": "No logical link. While unlikely, humans can tweet contradictory things. One does not physically prevent the other.",
+    "expected_source_yes": null,
+    "expected_source_no": null
+  },
+  {
+    "source_title": "Kamala Harris picks Roy Cooper as VP running mate",
+    "source_yes_sub": "Official VP Selection",
+    "source_category": "Politics",
+    "target_title": "Kamala Harris picks Josh Shapiro as VP running mate",
+    "target_yes_sub": "Official VP Selection",
+    "target_category": "Politics",
+    "note": "Exclusive Seat. A presidential candidate (traditionally) only picks one running mate. If A is picked, B is not.",
+    "expected_source_yes": "comparison_no",
+    "expected_source_no": null
+  },
+  {
+    "source_title": "Cillian Murphy cast as Doctor Doom in MCU",
+    "source_yes_sub": "Role Confirmation",
+    "source_category": "Entertainment",
+    "target_title": "Robert Downey Jr. cast as Doctor Doom in MCU",
+    "target_yes_sub": "Role Confirmation",
+    "target_category": "Entertainment",
+    "note": "Exclusive Role. Generally, one actor plays one specific character role. If Murphy gets it, RDJ didn't.",
+    "expected_source_yes": "comparison_no",
+    "expected_source_no": null
+  },
+  {
+    "source_title": "Zendaya cast in 'Spider-Man 4'",
+    "source_yes_sub": "Cast Member Confirmation",
+    "source_category": "Entertainment",
+    "target_title": "Tom Holland cast in 'Spider-Man 4'",
+    "target_yes_sub": "Cast Member Confirmation",
+    "target_category": "Entertainment",
+    "note": "Co-existence. Both actors can be in the same movie. One being cast does not prevent the other.",
+    "expected_source_yes": null,
+    "expected_source_no": null
+  },
+  {
+    "source_title": "Sam Altman returns as CEO of OpenAI",
+    "source_yes_sub": "CEO Appointment",
+    "source_category": "Tech",
+    "target_title": "Mira Murati appointed permanent CEO of OpenAI",
+    "target_yes_sub": "CEO Appointment",
+    "target_category": "Tech",
+    "note": "Exclusive Position. There is typically only one permanent CEO at a time.",
+    "expected_source_yes": "comparison_no",
+    "expected_source_no": null
+  },
+  {
+    "source_title": "Chrome takes > 60% of global browser market share",
+    "source_yes_sub": "Chrome Share > 60%",
+    "source_category": "Tech",
+    "target_title": "Safari takes > 50% of global browser market share",
+    "target_yes_sub": "Safari Share > 50%",
+    "target_category": "Tech",
+    "note": "Mathematical Impossibility (Zero Sum). If Chrome has >60%, there is only <40% left for everyone else combined. Safari cannot have >50%.",
+    "expected_source_yes": "comparison_no",
+    "expected_source_no": null
+  },
+  {
+    "source_title": "YouTube Ad Revenue exceeds $30 Billion",
+    "source_yes_sub": "Sub-segment Revenue > $30B",
+    "source_category": "Finance",
+    "target_title": "Alphabet (Google) Total Revenue exceeds $30 Billion",
+    "target_yes_sub": "Total Revenue > $30B",
+    "target_category": "Finance",
+    "note": "Part vs. Whole. Alphabet Revenue = YouTube + Search + Cloud, etc. If the part (YouTube) is >30B, the whole MUST be >30B.",
+    "expected_source_yes": "comparison_yes",
+    "expected_source_no": null
+  },
+  {
+    "source_title": "Luka Doncic scores more points than Shai Gilgeous-Alexander",
+    "source_yes_sub": "Luka Points > Shai Points",
+    "source_category": "Sports",
+    "target_title": "Shai Gilgeous-Alexander scores more points than Luka Doncic",
+    "target_yes_sub": "Shai Points > Luka Points",
+    "target_category": "Sports",
+    "note": "Mutual Exclusion (Inequality). If A > B is true, then B > A must be false.",
+    "expected_source_yes": "comparison_no",
+    "expected_source_no": null
+  }
+]

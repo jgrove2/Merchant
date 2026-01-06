@@ -11,8 +11,8 @@ import (
 	"backend/internal/db"
 	"backend/internal/embeddings"
 	"backend/internal/kalshi"
+	"backend/internal/llm"
 	"backend/internal/manager"
-	"backend/internal/slm"
 	"backend/internal/sync"
 
 	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
@@ -59,19 +59,31 @@ func main() {
 		log.Printf("Warning: Failed to init Redis: %v. Caching will be disabled.", err)
 	}
 
-	// 5. Initialize SLM Service
+	// 5. Initialize LLM Service
 	// Use SLM_MODEL env var, default to qwen3:14b if not set
 	modelName := os.Getenv("SLM_MODEL")
 	if modelName == "" {
 		modelName = "qwen3:14b"
 	}
-	slmService, err := slm.NewService(modelName)
-	if err != nil {
-		log.Printf("Warning: Failed to init SLM service: %v", err)
+	llmCfg := llm.Config{
+		Provider: llm.ProviderGroq,
+		Model:    modelName,
+		APIKey:   os.Getenv("GROQ_API_KEY"),
 	}
+	llmManager := llm.NewManager(llmCfg)
+	// llmManager can now act as the service provider if we adjust how it's used or just pass it where needed
+	// The original code tried to get a Service interface from Connect().
+	// Let's assume for now we want the manager itself if it has the CompareMarkets method,
+	// OR we need to update the syncer to accept the manager.
+	// However, looking at the previous code, LLM manager has Connect() returning Service.
+	// But CompareMarkets is defined on *Manager in prompt.go.
+	// This suggests *Manager IS the service we want to pass around if we want CompareMarkets.
+	// Let's check prompt.go again. Yes, func (m *Manager) CompareMarkets.
+
+	// So we pass llmManager to the syncer.
 
 	// 6. Initialize Syncer
-	syncer := sync.NewSyncer(database, kClient, embService, slmService, redisClient)
+	syncer := sync.NewSyncer(database, kClient, embService, llmManager, redisClient, "SOCIAL")
 
 	// 7. Initialize Handler
 	h := manager.NewHandler(database, kClient, embService, syncer)

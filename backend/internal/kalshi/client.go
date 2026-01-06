@@ -281,7 +281,7 @@ func (c *Client) GetEvent(eventTicker string) (*types.SimplifiedEvent, error) {
 	return simplifiedEvent, nil
 }
 
-func (c *Client) GetEvents(limit int, cursor string) (*EventsResponse, error) {
+func (c *Client) GetEvents(limit int, cursor string, category string) (*EventsResponse, error) {
 	// Limit validation - max 200
 	if limit > 200 {
 		limit = 200
@@ -303,6 +303,10 @@ func (c *Client) GetEvents(limit int, cursor string) (*EventsResponse, error) {
 	// log.Printf("Cursor: %s", cursor)
 	if cursor != "" {
 		params = append(params, fmt.Sprintf("cursor=%s", url.QueryEscape(cursor)))
+	}
+
+	if category != "" {
+		params = append(params, fmt.Sprintf("category=%s", url.QueryEscape(category)))
 	}
 
 	// Set min_close_ts to current timestamp

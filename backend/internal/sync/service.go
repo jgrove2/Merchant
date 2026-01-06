@@ -7,7 +7,7 @@ import (
 	"backend/internal/db"
 	"backend/internal/embeddings"
 	"backend/internal/kalshi"
-	"backend/internal/slm"
+	"backend/internal/llm"
 
 	"gorm.io/gorm"
 )
@@ -16,18 +16,20 @@ type Syncer struct {
 	DB               *gorm.DB
 	KClient          *kalshi.Client
 	EmbeddingService embeddings.Service
-	SLMService       slm.Service
+	LLMManager       *llm.Manager // Changed from SLMService to LLMManager
 	Redis            *db.Redis
 	LastEventSync    time.Time
+	TargetCategory   string // Optional filter for sync
 }
 
-func NewSyncer(database *gorm.DB, kClient *kalshi.Client, embeddingService embeddings.Service, slmService slm.Service, rdb *db.Redis) *Syncer {
+func NewSyncer(database *gorm.DB, kClient *kalshi.Client, embeddingService embeddings.Service, llmManager *llm.Manager, rdb *db.Redis, targetCategory string) *Syncer {
 	return &Syncer{
 		DB:               database,
 		KClient:          kClient,
 		EmbeddingService: embeddingService,
-		SLMService:       slmService,
+		LLMManager:       llmManager,
 		Redis:            rdb,
+		TargetCategory:   targetCategory,
 	}
 }
 

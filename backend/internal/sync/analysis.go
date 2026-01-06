@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"backend/internal/db"
+	"backend/internal/llm"
 )
 
 // AnalyzeRelatedMarkets finds related markets for upcoming events
@@ -49,11 +51,11 @@ func (s *Syncer) AnalyzeRelatedMarkets() {
 				continue
 			}
 
-			// Process related markets with SLM
+			// Process related markets with LLM
 			if len(related) > 0 {
 				// log.Printf("Analyzing %d related markets for %s...", len(related), m.Ticker)
 
-				// Convert simplified market to db.Market style for SLM helper
+				// Convert simplified market to db.Market style for LLM helper
 				sourceMarket := db.Market{
 					ExternalID:  m.Ticker,
 					EventTicker: m.EventTicker,
@@ -98,45 +100,52 @@ func (s *Syncer) processComparison(source, target db.Market, sourceTime, targetT
 	if s.Redis != nil {
 		_, err := s.Redis.Get(cacheKey)
 		if err == nil {
-			// Found in Redis. Extend TTL to 3 hours and skip SLM.
-			// Re-save (or just set expire) - Set is easiest with existing helper if we had the value.
-			// Since we just want to extend, Expire is better but our wrapper might not expose it.
-			// Let's just skip for now as requested "if its in redis and not expired... it won't do the comparison".
-			// The user said "lets set the expiration to 3 hours".
-			// We need a way to extend. If wrapper doesn't have it, we assume we skip.
-			// User: "If its in redis and not expired lets set the expiration to 3 hours"
-			// I'll add Expire to Redis wrapper if needed or just re-set if I had the value.
-			// Wrapper only has Get/Add. I will use Get, then AddWithTTL.
-			// Wait, I need the value to re-set it. Get returns string.
+			// Found in Redis. Extend TTL to 3 hours and skip LLM.
 			val, _ := s.Redis.Get(cacheKey)
 			s.Redis.AddWithTTL(cacheKey, val, 3*time.Hour)
 			return
 		}
 	}
 
-	// 3. SLM Call
-	if s.SLMService == nil {
+	// 3. LLM Call
+	if s.LLMManager == nil {
 		return
 	}
 
-	result, err := s.SLMService.CompareMarkets(source, target)
+	// Map db.Market to llm.Market
+	llmSource := llm.Market{
+		Title:       source.Title,
+		YesSubTitle: source.YesSubTitle,
+		NoSubTitle:  source.NoSubTitle,
+		EventId:     source.EventTicker,
+		ID:          source.ExternalID,
+	}
+	llmTarget := llm.Market{
+		Title:       target.Title,
+		YesSubTitle: target.YesSubTitle,
+		NoSubTitle:  target.NoSubTitle,
+		EventId:     target.EventTicker,
+		ID:          target.ExternalID,
+	}
+
+	result, err := s.LLMManager.CompareMarkets(context.Background(), llmSource, llmTarget)
 	if err != nil {
-		log.Printf("SLM Comparison failed for %s vs %s: %v", source.ExternalID, target.ExternalID, err)
+		log.Printf("LLM Comparison failed for %s vs %s: %v", source.ExternalID, target.ExternalID, err)
 		return
 	}
 
-	if result.SourceYes == nil && result.SourceNo == nil {
-		log.Printf("SLM Analysis [%s vs %s]: No logical necessity found (both null), skipping cache", source.ExternalID, target.ExternalID)
+	if result.Mapping.PrimaryYes == nil && result.Mapping.PrimaryNo == nil {
+		log.Printf("LLM Analysis [%s vs %s]: No logical necessity found (both null), skipping cache", source.ExternalID, target.ExternalID)
 		return
 	}
 
 	yesStr := "null"
-	if result.SourceYes != nil {
-		yesStr = *result.SourceYes
+	if result.Mapping.PrimaryYes != nil {
+		yesStr = *result.Mapping.PrimaryYes
 	}
 	noStr := "null"
-	if result.SourceNo != nil {
-		noStr = *result.SourceNo
+	if result.Mapping.PrimaryNo != nil {
+		noStr = *result.Mapping.PrimaryNo
 	}
 
 	fmtMarket := func(m db.Market) string {
@@ -153,10 +162,10 @@ func (s *Syncer) processComparison(source, target db.Market, sourceTime, targetT
 		if err != nil {
 			log.Printf("Failed to cache comparison for %s vs %s: %v", source.ExternalID, target.ExternalID, err)
 		} else {
-			log.Printf("SLM Analysis [%s vs %s]: SourceYes->%s, SourceNo->%s | Saved to Redis", fmtMarket(source), fmtMarket(target), yesStr, noStr)
+			log.Printf("LLM Analysis [%s vs %s]: PrimaryYes->%s, PrimaryNo->%s | Saved to Redis", fmtMarket(source), fmtMarket(target), yesStr, noStr)
 		}
 	} else {
-		log.Printf("SLM Analysis [%s vs %s]: SourceYes->%s, SourceNo->%s | Redis not available", fmtMarket(source), fmtMarket(target), yesStr, noStr)
+		log.Printf("LLM Analysis [%s vs %s]: PrimaryYes->%s, PrimaryNo->%s | Redis not available", fmtMarket(source), fmtMarket(target), yesStr, noStr)
 	}
 }
 
