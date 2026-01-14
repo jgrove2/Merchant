@@ -64,3 +64,18 @@ type ArbitrageOpportunity struct {
 	DetectedAt      time.Time `gorm:"autoCreateTime"`
 	ExpiresAt       time.Time
 }
+
+// MarketMapping stores the logical relationship between two markets as determined by LLM
+type MarketMapping struct {
+	ID             uint   `gorm:"primaryKey"`
+	SourceMarketID uint   `gorm:"not null;uniqueIndex:idx_source_target"`
+	SourceMarket   Market `gorm:"foreignKey:SourceMarketID"`
+	TargetMarketID uint   `gorm:"not null;uniqueIndex:idx_source_target"`
+	TargetMarket   Market `gorm:"foreignKey:TargetMarketID"`
+	// "comparison_yes", "comparison_no", or null
+	YesMapping *string
+	// "comparison_yes", "comparison_no", or null
+	NoMapping *string
+	Analysis  string // The generic reasoning text
+	CreatedAt time.Time
+}

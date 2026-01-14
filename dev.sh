@@ -16,7 +16,7 @@ mkdir -p data
 
 # Ensure DATABASE_URL is set for local dev if not in .env
 if [ -z "$DATABASE_URL" ]; then
-  export DATABASE_URL="$(pwd)/data/merchant.db"
+  export DATABASE_URL="host=localhost user=vector_admin password=vector_password dbname=vector_db port=5432 sslmode=disable"
 fi
 
 # Set REDIS_URL for local dev if not in .env
@@ -45,8 +45,8 @@ get_compose_cmd() {
 COMPOSE_CMD=$(get_compose_cmd)
 echo "Using compose command: $COMPOSE_CMD"
 
-# Start Redis and SLM via Docker (Dev Mode)
-echo "Starting Redis and SLM containers..."
+# Start Redis, SLM, and Postgres via Docker (Dev Mode)
+echo "Starting Redis, Postgres, and SLM containers..."
 
 # Check if we need sudo privileges (user not in docker group)
 SUDO=""
@@ -105,13 +105,12 @@ trap cleanup SIGINT SIGTERM
 echo "Starting Dev Environment..."
 
 # Frontend
-cd merchant_ui && npm run dev &
+# cd merchant_ui && npm run dev &
 
 # Backend Services
 cd backend
 
-# Export CGO_CFLAGS to include the local sqlite headers
-export CGO_CFLAGS="-I$(pwd)/include"
+# Export CGO_CFLAGS was removed as we switched to Postgres
 
 # Run Air for each service pointing to its specific config
 air -c .air/bff.toml &

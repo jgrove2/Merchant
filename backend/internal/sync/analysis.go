@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strconv"
 	"time"
 
 	"backend/internal/db"
@@ -65,10 +66,26 @@ func (s *Syncer) AnalyzeRelatedMarkets() {
 					NoSubTitle:  m.NoSubTitle,
 				}
 
+				// We need the ID for foreign key. Try to fetch from DB using ExternalID
+				var sourceDB db.Market
+				if err := s.DB.Where("external_id = ?", m.Ticker).First(&sourceDB).Error; err == nil {
+					sourceMarket.ID = sourceDB.ID
+				} else {
+					// If we can't find the source market in DB, we can't save a mapping for it.
+					// Skip this market for now.
+					continue
+				}
+
 				for _, r := range related {
 					if r.Market.ExternalID == m.Ticker {
 						continue
 					}
+
+					// Skip if markets are in different categories
+					if m.Category != r.Market.Category {
+						continue
+					}
+
 					var targetEvent db.Event
 					// Try to fetch event to get close time, fallback to current market update time if fails
 					targetCloseTime := r.Market.LastDataUpdate
@@ -85,6 +102,11 @@ func (s *Syncer) AnalyzeRelatedMarkets() {
 }
 
 func (s *Syncer) processComparison(source, target db.Market, sourceTime, targetTime time.Time) {
+	// Safety check for Foreign Keys
+	if source.ID == 0 || target.ID == 0 {
+		return
+	}
+
 	// 1. Date Check (within 1 month)
 	diff := sourceTime.Sub(targetTime)
 	daysDiff := math.Abs(diff.Hours() / 24.0)
@@ -94,17 +116,12 @@ func (s *Syncer) processComparison(source, target db.Market, sourceTime, targetT
 		return
 	}
 
-	// 2. Redis Check
-	cacheKey := fmt.Sprintf("rel:%s:%s", source.ExternalID, target.ExternalID)
-
-	if s.Redis != nil {
-		_, err := s.Redis.Get(cacheKey)
-		if err == nil {
-			// Found in Redis. Extend TTL to 3 hours and skip LLM.
-			val, _ := s.Redis.Get(cacheKey)
-			s.Redis.AddWithTTL(cacheKey, val, 3*time.Hour)
-			return
-		}
+	// 2. DB Check (Existing Mapping)
+	// We check if a mapping already exists between these two markets
+	var existing db.MarketMapping
+	if err := s.DB.Where("source_market_id = ? AND target_market_id = ?", source.ID, target.ID).First(&existing).Error; err == nil {
+		// Found existing mapping, skip LLM
+		return
 	}
 
 	// 3. LLM Call
@@ -135,7 +152,7 @@ func (s *Syncer) processComparison(source, target db.Market, sourceTime, targetT
 	}
 
 	if result.Mapping.PrimaryYes == nil && result.Mapping.PrimaryNo == nil {
-		log.Printf("LLM Analysis [%s vs %s]: No logical necessity found (both null), skipping cache", source.ExternalID, target.ExternalID)
+		log.Printf("LLM Analysis [%s vs %s]: No logical necessity found (both null), skipping save", source.ExternalID, target.ExternalID)
 		return
 	}
 
@@ -155,17 +172,20 @@ func (s *Syncer) processComparison(source, target db.Market, sourceTime, targetT
 		return fmt.Sprintf("%s [%s]", m.Title, m.Description)
 	}
 
-	// 4. Save to Redis
-	if s.Redis != nil {
-		jsonBytes, _ := json.Marshal(result)
-		err := s.Redis.AddWithTTL(cacheKey, string(jsonBytes), 3*time.Hour)
-		if err != nil {
-			log.Printf("Failed to cache comparison for %s vs %s: %v", source.ExternalID, target.ExternalID, err)
-		} else {
-			log.Printf("LLM Analysis [%s vs %s]: PrimaryYes->%s, PrimaryNo->%s | Saved to Redis", fmtMarket(source), fmtMarket(target), yesStr, noStr)
-		}
+	// 4. Save to DB
+	newMapping := db.MarketMapping{
+		SourceMarketID: source.ID,
+		TargetMarketID: target.ID,
+		YesMapping:     result.Mapping.PrimaryYes,
+		NoMapping:      result.Mapping.PrimaryNo,
+		Analysis:       result.RawResponse, // Save raw response as analysis for now, or just empty if not needed
+		CreatedAt:      time.Now(),
+	}
+
+	if err := s.DB.Create(&newMapping).Error; err != nil {
+		log.Printf("Failed to save comparison for %s vs %s: %v", source.ExternalID, target.ExternalID, err)
 	} else {
-		log.Printf("LLM Analysis [%s vs %s]: PrimaryYes->%s, PrimaryNo->%s | Redis not available", fmtMarket(source), fmtMarket(target), yesStr, noStr)
+		log.Printf("LLM Analysis [%s vs %s]: PrimaryYes->%s, PrimaryNo->%s | Saved to DB", fmtMarket(source), fmtMarket(target), yesStr, noStr)
 	}
 }
 
@@ -191,12 +211,14 @@ func (s *Syncer) findRelatedMarkets(query string, limit int) ([]MarketWithScore,
 	}
 	var results []SearchResult
 
+	// Format vector string for pgvector: '[1.0, 2.0, ...]'
+	vecString = pgVectorString(vec)
+
 	err = s.DB.Raw(`
-		SELECT rowid as id, distance 
-		FROM vec_markets 
-		WHERE embedding MATCH ? 
-		AND k = ?
+		SELECT rowid as id, embedding <-> ? as distance
+		FROM vec_markets
 		ORDER BY distance
+		LIMIT ?
 	`, vecString, limit).Scan(&results).Error
 
 	if err != nil {
@@ -237,4 +259,21 @@ func (s *Syncer) findRelatedMarkets(query string, limit int) ([]MarketWithScore,
 	}
 
 	return response, nil
+}
+
+// pgVectorString helper to convert []float32 to string format '[1.0, 2.0]'
+func pgVectorString(vec []float32) string {
+	if len(vec) == 0 {
+		return "[]"
+	}
+	var b []byte
+	b = append(b, '[')
+	for i, v := range vec {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		b = strconv.AppendFloat(b, float64(v), 'f', -1, 32)
+	}
+	b = append(b, ']')
+	return string(b)
 }

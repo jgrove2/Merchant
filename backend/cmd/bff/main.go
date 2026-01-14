@@ -4,7 +4,6 @@ import (
 	"log"
 	"os"
 
-	"backend/internal/bff"
 	"backend/internal/config"
 	"backend/internal/db"
 	"github.com/gin-gonic/gin"
@@ -22,7 +21,7 @@ func main() {
 
 	// 2. Initialize Handler
 	managerURL := os.Getenv("MANAGER_URL")
-	h := bff.NewHandler(database, managerURL)
+	h := NewHandler(database, managerURL)
 
 	// 3. Setup Router
 	r := gin.Default()

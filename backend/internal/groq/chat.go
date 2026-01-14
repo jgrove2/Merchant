@@ -2,6 +2,7 @@ package groq
 
 import "context"
 
+// ChatCompletion sends a request to the Groq API to generate a chat completion.
 func (c *Client) ChatCompletion(
 	ctx context.Context,
 	req ChatCompletionRequest,
@@ -22,6 +23,8 @@ func (c *Client) ChatCompletion(
 	return &resp, nil
 }
 
+// SimplePrompt is a helper function to send a simple text prompt to the Groq API.
+// It handles creating the request object and extracting the response content.
 func (c *Client) SimplePrompt(
 	ctx context.Context,
 	model string,
@@ -39,10 +42,8 @@ func (c *Client) SimplePrompt(
 				Content: prompt,
 			},
 		},
-		ReasoningEffort:     reasoningEffort,
-		Temperature:         temperature,
-		TopP:                topP,
-		MaxCompletionTokens: maxCompletionTokens,
+		ReasoningEffort: reasoningEffort,
+		Temperature:     temperature,
 	})
 	if err != nil {
 		return "", Usage{}, err

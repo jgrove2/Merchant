@@ -40,5 +40,20 @@ services:
       model-downloader:
         condition: service_completed_successfully
 
+  # 4. Postgres with Vector extension
+  postgres-vector:
+    image: pgvector/pgvector:pg16
+    container_name: postgres-vector-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vector_admin
+      POSTGRES_PASSWORD: vector_password
+      POSTGRES_DB: vector_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_vector_dev_data:/var/lib/postgresql/data
+
 volumes:
   llm_models:
+  postgres_vector_dev_data:

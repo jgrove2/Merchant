@@ -5,27 +5,19 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
-	"time"
 
 	"backend/internal/db"
 	"backend/internal/embeddings"
 	"backend/internal/kalshi"
 	"backend/internal/llm"
-	"backend/internal/manager"
 	"backend/internal/sync"
 
-	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	"github.com/gin-gonic/gin"
-	"github.com/mattn/go-sqlite3"
 )
 
 func main() {
-	// Register sqlite-vec extension
-	sqlite_vec.Auto()
-	// Force registration of sqlite3 driver to ensure extensions are loaded
-	_ = sqlite3.SQLITE_DELETE
-
 	log.Println("Starting Manager Service...")
 
 	// 1. Initialize DB
@@ -54,10 +46,11 @@ func main() {
 	}
 
 	// 4. Initialize Redis
-	redisClient, err := db.NewRedis(os.Getenv("REDIS_URL"))
-	if err != nil {
-		log.Printf("Warning: Failed to init Redis: %v. Caching will be disabled.", err)
-	}
+	// Redis is deprecated and removed.
+	// _, err = db.NewRedis(os.Getenv("REDIS_URL"))
+	// if err != nil {
+	// 	log.Printf("Warning: Failed to init Redis: %v. Caching will be disabled.", err)
+	// }
 
 	// 5. Initialize LLM Service
 	// Use SLM_MODEL env var, default to qwen3:14b if not set
@@ -83,10 +76,27 @@ func main() {
 	// So we pass llmManager to the syncer.
 
 	// 6. Initialize Syncer
-	syncer := sync.NewSyncer(database, kClient, embService, llmManager, redisClient, "SOCIAL")
+	// Parse SYNC_CATEGORIES from environment (comma-separated list)
+	categoriesEnv := os.Getenv("SYNC_CATEGORIES")
+	if categoriesEnv == "" {
+		log.Fatal("SYNC_CATEGORIES environment variable is required. Set it to a comma-separated list of categories (e.g., SOCIAL,POLITICS,SPORTS)")
+	}
+	var categories []string
+	for _, cat := range strings.Split(categoriesEnv, ",") {
+		trimmed := strings.TrimSpace(cat)
+		if trimmed != "" {
+			categories = append(categories, trimmed)
+		}
+	}
+	if len(categories) == 0 {
+		log.Fatal("SYNC_CATEGORIES must contain at least one valid category")
+	}
+	log.Printf("Configured categories: %v", categories)
+
+	syncer := sync.NewSyncer(database, kClient, embService, llmManager, categories)
 
 	// 7. Initialize Handler
-	h := manager.NewHandler(database, kClient, embService, syncer)
+	h := NewHandler(database, kClient, embService, syncer)
 
 	// 8. Start Manager API
 	go func() {
@@ -118,19 +128,7 @@ func main() {
 	}()
 
 	// 10. Execution Loop
-	ticker := time.NewTicker(24 * time.Hour)
-	defer ticker.Stop()
-
-	// Run initial sync on startup
-	go h.RunSyncCycle()
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("Manager stopped.")
-			return
-		case <-ticker.C:
-			go h.RunSyncCycle()
-		}
-	}
+	// Wait for interrupt signal to gracefully shutdown the server
+	<-ctx.Done()
+	log.Println("Manager stopped.")
 }

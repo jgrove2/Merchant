@@ -2,18 +2,13 @@ package main
 
 import (
 	"log"
+	"strconv"
 
 	"backend/internal/db"
 	"backend/internal/embeddings"
-	"encoding/json"
-	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
-	"github.com/mattn/go-sqlite3"
 )
 
 func main() {
-	sqlite_vec.Auto()
-	_ = sqlite3.SQLITE_DELETE
-
 	log.Println("Connecting to DB...")
 	database, err := db.Connect()
 	if err != nil {
@@ -44,13 +39,35 @@ func main() {
 			continue
 		}
 
-		vecBytes, _ := json.Marshal(vec)
-		vecString := string(vecBytes)
+		vecString := pgVectorString(vec)
 
-		query := `INSERT OR REPLACE INTO vec_markets(id, embedding) VALUES (?, ?)`
+		// Postgres uses ON CONFLICT for replace behavior if primary key matches
+		// Here we assume rowid is the primary key
+		query := `
+			INSERT INTO vec_markets(rowid, embedding) 
+			VALUES (?, ?)
+			ON CONFLICT(rowid) DO UPDATE SET embedding = EXCLUDED.embedding
+		`
 		if err := database.Exec(query, m.ID, vecString).Error; err != nil {
 			log.Printf("Failed to insert embedding for %s: %v", m.Ticker, err)
 		}
 	}
 	log.Println("Finished backfilling embeddings.")
+}
+
+// pgVectorString helper to convert []float32 to string format '[1.0, 2.0]'
+func pgVectorString(vec []float32) string {
+	if len(vec) == 0 {
+		return "[]"
+	}
+	var b []byte
+	b = append(b, '[')
+	for i, v := range vec {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		b = strconv.AppendFloat(b, float64(v), 'f', -1, 32)
+	}
+	b = append(b, ']')
+	return string(b)
 }

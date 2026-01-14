@@ -1,0 +1,33 @@
+# backend/Dockerfile.manager
+FROM golang:1.25-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache build-base
+
+WORKDIR /app
+
+# Copy dependency definitions
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy shared internal code
+COPY internal ./internal
+
+# Copy service-specific code
+COPY cmd/manager ./cmd/manager
+
+# Build the binary
+ENV CGO_ENABLED=1
+RUN go build -o /bin/manager ./cmd/manager/handlers.go ./cmd/manager/main.go
+
+# Final stage
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /app
+COPY --from=builder /bin/manager /app/manager
+
+# Create directory for embedding models
+RUN mkdir -p /app/models
+
+CMD ["/app/manager"]

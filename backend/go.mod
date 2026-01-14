@@ -5,12 +5,10 @@ go 1.25.5
 require gorm.io/gorm v1.31.1
 
 require (
-	github.com/asg017/sqlite-vec-go-bindings v0.1.6
 	github.com/gin-gonic/gin v1.11.0
-	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/nlpodyssey/cybertron v0.2.1
 	github.com/redis/go-redis/v9 v9.17.2
-	gorm.io/driver/sqlite v1.6.0
+	gorm.io/driver/postgres v1.6.0
 )
 
 require (
@@ -29,6 +27,10 @@ require (
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/goccy/go-yaml v1.18.0 // indirect
 	github.com/google/flatbuffers v23.5.26+incompatible // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/pgx/v5 v5.7.2 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect

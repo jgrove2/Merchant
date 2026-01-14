@@ -1,8 +1,6 @@
 package sync
 
 import (
-	"encoding/json"
-	"fmt"
 	"log"
 	"time"
 
@@ -14,7 +12,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func (s *Syncer) SyncEvents() {
+func (s *Syncer) SyncKalshiEvents() {
 	if s.KClient == nil {
 		log.Println("Skipping event sync: Kalshi client not configured")
 		return
@@ -49,61 +47,56 @@ func (s *Syncer) SyncEvents() {
 
 func (s *Syncer) performEventSync(provider db.Provider) {
 	totalFetched := 0
-	eventCursor := ""
 	const batchSize = 100
 	const rateLimitDelay = 100 * time.Millisecond
 
-	for {
-		time.Sleep(rateLimitDelay)
+	// Loop over each target category
+	for _, category := range s.TargetCategories {
+		log.Printf("Syncing events for category: %s", category)
+		eventCursor := ""
 
-		// 2. Fetch from API
-		resp, err := s.fetchEventsWithRetry(batchSize, eventCursor)
-		if err != nil {
-			log.Printf("Failed to fetch events: %v", err)
-			break
-		}
-		eventCursor = resp.Cursor
-		if resp == nil || len(resp.Events) == 0 {
-			break
-		}
+		for {
+			time.Sleep(rateLimitDelay)
 
-		// 3. Process Data into Structs
-		eventsToUpsert, marketsToUpsert := s.processEventBatch(resp.Events, provider.ID)
-
-		// 4. DB Operations (Upsert Events & Markets)
-		// We do this in a transaction to ensure consistency
-		if len(eventsToUpsert) > 0 {
-			err := s.upsertEventsData(eventsToUpsert)
+			// 2. Fetch from API
+			resp, err := s.fetchEventsWithRetry(batchSize, eventCursor, category)
 			if err != nil {
-				log.Printf("Failed to upsert events batch: %v", err)
-				continue
+				log.Printf("Failed to fetch events for category %s: %v", category, err)
+				break
 			}
-		}
-
-		if len(marketsToUpsert) > 0 {
-			err := s.upsertMarketData(marketsToUpsert)
-			if err != nil {
-				log.Printf("Failed to upsert markets batch: %v", err)
-				continue
+			eventCursor = resp.Cursor
+			if resp == nil || len(resp.Events) == 0 {
+				break
 			}
-		}
 
-		// 5. Update Embeddings (Outside Transaction)
-		if s.EmbeddingService != nil {
+			// 3. Process Data into Structs
+			eventsToUpsert, marketsToUpsert := s.processEventBatch(resp.Events, provider.ID)
+
+			// 4. DB Operations (Upsert Events & Markets)
+			// We do this in a transaction to ensure consistency
+			if len(eventsToUpsert) > 0 {
+				err := s.upsertEventsData(eventsToUpsert)
+				if err != nil {
+					log.Printf("Failed to upsert events batch: %v", err)
+					continue
+				}
+			}
+
 			if len(marketsToUpsert) > 0 {
-				s.updateMarketEmbeddings(marketsToUpsert)
+				err := s.upsertMarketData(marketsToUpsert)
+				if err != nil {
+					log.Printf("Failed to upsert markets batch: %v", err)
+					continue
+				}
 			}
-		}
 
-		totalFetched += len(resp.Events)
-		if resp.Cursor == "" {
-			log.Println("Reached end of events list.")
-			break
+			totalFetched += len(resp.Events)
+			if resp.Cursor == "" {
+				log.Printf("Reached end of events list for category: %s", category)
+				break
+			}
 		}
 	}
-
-	// 6. Cleanup
-	s.pruneStaleEmbeddings()
 
 	// Update provider last sync time
 	now := time.Now()
@@ -116,17 +109,17 @@ func (s *Syncer) performEventSync(provider db.Provider) {
 
 // --- Helper Functions ---
 
-func (s *Syncer) fetchEventsWithRetry(limit int, cursor string) (*kalshi.EventsResponse, error) {
+func (s *Syncer) fetchEventsWithRetry(limit int, cursor string, category string) (*kalshi.EventsResponse, error) {
 	var resp *kalshi.EventsResponse
 	var err error
 
-	log.Printf("Fetching event batch (cursor: %s)...", cursor)
+	log.Printf("Fetching event batch (cursor: %s, category: %s)...", cursor, category)
 
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
 			time.Sleep(1 * time.Second)
 		}
-		resp, err = s.KClient.GetEvents(limit, cursor, s.TargetCategory)
+		resp, err = s.KClient.GetEvents(limit, cursor, category)
 		if err == nil {
 			return resp, nil
 		}
@@ -247,71 +240,4 @@ func (s *Syncer) upsertEventsData(events []db.Event) error {
 
 		return nil
 	})
-}
-
-func (s *Syncer) updateMarketEmbeddings(markets []db.Market) {
-	// Re-fetch the markets to ensure we have the IDs populated from the upsert
-	var freshMarkets []db.Market
-	tickers := make([]string, len(markets))
-	for i, m := range markets {
-		tickers[i] = m.Ticker
-	}
-
-	if err := s.DB.Where("ticker IN ?", tickers).Find(&freshMarkets).Error; err != nil {
-		log.Printf("Failed to fetch fresh markets for embeddings: %v", err)
-		return
-	}
-
-	log.Printf("Updating embeddings for %d markets...", len(freshMarkets))
-
-	for _, m := range freshMarkets {
-		if m.Status != "active" {
-			continue
-		}
-
-		embeddingText := fmt.Sprintf("%s %s %s", m.Title, m.Description, m.Category)
-		vec, err := s.EmbeddingService.Generate(embeddingText)
-		if err != nil {
-			log.Printf("Gen failed: %v", err)
-			continue
-		}
-
-		vecBytes, err := json.Marshal(vec)
-		if err != nil {
-			log.Printf("Marshal failed: %v", err)
-			continue
-		}
-		vecString := string(vecBytes)
-
-		// Delete existing
-		_ = s.DB.Exec("DELETE FROM vec_markets WHERE rowid = ?", m.ID)
-
-		query := `
-			INSERT INTO vec_markets(rowid, embedding) 
-			VALUES (?, ?)
-		`
-		if err := s.DB.Exec(query, m.ID, vecString).Error; err != nil {
-			log.Printf("Failed to save embedding for market %d: %v", m.ID, err)
-		}
-	}
-}
-
-func (s *Syncer) pruneStaleEmbeddings() {
-	if s.EmbeddingService == nil {
-		return
-	}
-	log.Println("Pruning stale embeddings...")
-
-	err := s.DB.Exec(`
-		DELETE FROM vec_markets 
-		WHERE rowid IN (
-			SELECT id FROM markets WHERE status != 'active'
-		)
-	`).Error
-
-	if err != nil {
-		log.Printf("Failed to prune stale embeddings: %v", err)
-	} else {
-		log.Println("Pruning complete.")
-	}
 }

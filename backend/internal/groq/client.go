@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"time"
 )
@@ -66,7 +67,9 @@ func (c *Client) do(
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return errors.New("groq api error: " + resp.Status)
+		// Read the body to include in the error message
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return errors.New("groq api error: " + resp.Status + " body: " + string(bodyBytes))
 	}
 
 	if out != nil {

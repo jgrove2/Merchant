@@ -53,6 +53,7 @@ func main() {
 	temperature := flag.Float64("temperature", 1.0, "Sampling temperature to use (default: 1.0)")
 	topP := flag.Float64("top-p", -1.0, "Top-p sampling (nucleus sampling) - set to -1 to disable (default: -1)")
 	maxTokens := flag.Int("max-completion-tokens", 8192, "Max tokens to generate (default: 8192)")
+	limit := flag.Int("limit", 10, "Number of test cases to run (default: 10, set to -1 for all)")
 	flag.Parse()
 
 	fmt.Printf("Running benchmark on model: %s\n", *modelName)
@@ -79,12 +80,26 @@ func main() {
 
 	fmt.Printf("Loaded %d test cases.\n\n", len(cases))
 
+	// Shuffle and limit cases if requested
+	if *limit > 0 && *limit < len(cases) {
+		// Fisher-Yates shuffle
+		randBytes := make([]byte, 8)
+		for i := len(cases) - 1; i > 0; i-- {
+			rand.Read(randBytes) // Use crypto/rand for better randomness
+			// Convert bytes to uint64 for index generation, simple modulo is fine for this purpose
+			j := int(uint64(randBytes[0])|uint64(randBytes[1])<<8|uint64(randBytes[2])<<16) % (i + 1)
+			cases[i], cases[j] = cases[j], cases[i]
+		}
+		cases = cases[:*limit]
+		fmt.Printf("Randomly selected %d cases for this run.\n", *limit)
+	}
+
 	// Run benchmarks
 	var results []Result
 	passCount := 0
 
 	llmCfg := llm.Config{
-		Provider:            llm.ProviderGroq,
+		Provider:            "", // Auto-infer provider
 		Model:               *modelName,
 		ReasoningEffort:     *reasoningEffort,
 		Temperature:         *temperature,
@@ -147,7 +162,7 @@ func main() {
 			r.Matches = match
 			if match {
 				passCount++
-				//fmt.Printf("PASSED (%v)\n", duration)
+				fmt.Printf("%s[%d/%d] PASSED: %s vs %s (%v)%s\n", ColorGreen, i+1, len(cases), c.SourceTitle, c.TargetTitle, duration, ColorReset)
 			} else {
 				//fmt.Printf("FAILED (%v)\n", duration)
 				fmt.Printf("%s[%d/%d] FAILED: %s vs %s (%v)%s\n", ColorRed, i+1, len(cases), c.SourceTitle, c.TargetTitle, duration, ColorReset)

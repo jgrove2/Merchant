@@ -3,45 +3,81 @@ services:
   bff:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    command: /bin/bff
+      dockerfile: Dockerfile.bff
+    command: /app/bff
     ports:
       - "8080:8080"
     environment:
-      - DATABASE_URL=/data/merchant.db
-      - SLM_URL=http://ollama:11434/v1
-    volumes:
-
-      - ./data:/data
+      - DATABASE_URL=host=postgres-vector user=vector_admin password=vector_password dbname=vector_db port=5432 sslmode=disable
+      - MANAGER_URL=http://manager:8081
+    depends_on:
+      - postgres-vector
     restart: always
 
   # 2. Manager (Sync/Arb Logic)
   manager:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    command: /bin/manager
+      dockerfile: Dockerfile.manager
+    command: /app/manager
+    ports:
+      - "8081:8081"
     environment:
-      - DATABASE_URL=/data/merchant.db
+      - DATABASE_URL=host=postgres-vector user=vector_admin password=vector_password dbname=vector_db port=5432 sslmode=disable
       - SLM_URL=http://ollama:11434/v1
       - SLM_MODEL=qwen3:14b
+      - SYNC_CATEGORIES=${SYNC_CATEGORIES:-SOCIAL}
     volumes:
-      - ./data:/data
+      - ./data/models:/app/models
+    depends_on:
+      - postgres-vector
     restart: always
 
   # 3. Trader (Execution Logic)
   trader:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    command: /bin/trader
+      dockerfile: Dockerfile.trader
+    command: /app/trader
     environment:
-      - DATABASE_URL=/data/merchant.db
-    volumes:
-      - ./data:/data
+      - DATABASE_URL=host=postgres-vector user=vector_admin password=vector_password dbname=vector_db port=5432 sslmode=disable
+    depends_on:
+      - postgres-vector
     restart: always
 
-  # 4. Frontend (Vite/TanStack)
+  # 4. Cron (Scheduled Tasks)
+  cron:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.cron
+    command: /app/cron
+    environment:
+      - DATABASE_URL=host=postgres-vector user=vector_admin password=vector_password dbname=vector_db port=5432 sslmode=disable
+      - KALSHI_BASE_URL=${KALSHI_BASE_URL}
+      - KALSHI_API_KEY=${KALSHI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - SLM_MODEL=qwen3:14b
+      - SYNC_CATEGORIES=${SYNC_CATEGORIES:-SOCIAL}
+    depends_on:
+      - postgres-vector
+      - ollama
+    restart: always
+
+  # 5. Postgres with Vector extension
+  postgres-vector:
+    image: pgvector/pgvector:pg16
+    container_name: postgres-vector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vector_admin
+      POSTGRES_PASSWORD: vector_password
+      POSTGRES_DB: vector_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_vector_data:/var/lib/postgresql/data
+
+  # 6. Frontend (Vite/TanStack)
   # In production, you'd usually serve this via Nginx, 
   # but this setup runs the dev/preview server for testing.
   frontend:
@@ -53,14 +89,7 @@ services:
       - VITE_API_URL=http://localhost:8080
     restart: always
 
-  # 5. Redis (Cache/kv store)
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    restart: always
-
-  # 6. Ollama (SLM/LLM)
+  # 7. Ollama (SLM/LLM)
   ollama:
     image: ollama/ollama:latest
     ports:
@@ -76,3 +105,4 @@ services:
 
 volumes:
   ollama_data:
+  postgres_vector_data:
